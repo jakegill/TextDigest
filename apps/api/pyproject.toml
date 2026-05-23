@@ -6,6 +6,10 @@ requires-python = ">=3.13"
 dependencies = [
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.32.0",
+    "mineru[pipeline]>=3.1.15",
+    "google-cloud-storage>=2.18.0",
+    "google-auth>=2.35.0",
+    "python-multipart>=0.0.20",
 ]
 
 [dependency-groups]

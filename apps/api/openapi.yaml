@@ -32,3 +32,13 @@ paths:
                             status:
                                 type: string
                                 example: ok
+    /titles:
+        post:
+            summary: Upload a PDF for parsing
+            operationId: uploadTitle
+            x-google-backend:
+                address: BACKEND_URL/titles
+                deadline: 600.0
+            responses:
+                "200":
+                    description: Parsed and stored.

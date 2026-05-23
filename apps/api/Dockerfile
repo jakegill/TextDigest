@@ -1,9 +1,12 @@
 FROM python:3.13-slim
 
-# uv for fast, reproducible installs from uv.lock.
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    poppler-utils libgl1 libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
 
 ENV UV_LINK_MODE=copy \
     UV_COMPILE_BYTECODE=1 \

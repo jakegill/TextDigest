@@ -1,0 +1,11 @@
+{
+  "name": "@td/api",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "uv run uvicorn src.main:app --reload --port 8080",
+    "build": "uv sync --frozen",
+    "typecheck": "uv run mypy src",
+    "lint": "uv run ruff check src"
+  }
+}

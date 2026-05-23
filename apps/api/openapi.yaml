@@ -1,0 +1,34 @@
+# OpenAPI 2.0 (Swagger) spec consumed by GCP API Gateway.
+#
+# IMPORTANT: GCP API Gateway only accepts OpenAPI 2.0 — NOT the OpenAPI 3.0
+# that FastAPI auto-generates at /openapi.json. Keep this file hand-edited
+# in sync with apps/api/src/main.py until we add a 3.0 → 2.0 conversion step.
+#
+# `BACKEND_URL` is a placeholder substituted at deploy time by
+# infra/api-gateway.ts with the Cloud Run service URL.
+
+swagger: "2.0"
+info:
+    title: Text Digest API
+    description: Authentication, Upload & Retrieval of E-Books, AI Q&A.
+    version: "1.0.0"
+schemes:
+    - https
+produces:
+    - application/json
+paths:
+    /health:
+        get:
+            summary: Health check
+            operationId: health
+            x-google-backend:
+                address: BACKEND_URL/health
+            responses:
+                "200":
+                    description: API is healthy.
+                    schema:
+                        type: object
+                        properties:
+                            status:
+                                type: string
+                                example: ok

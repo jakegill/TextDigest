@@ -74,6 +74,12 @@ new gcp.projects.IAMMember("api-vertex-user", {
 	member: $interpolate`serviceAccount:${apiSa.email}`,
 });
 
+new gcp.projects.IAMMember("api-firestore-user", {
+	project,
+	role: "roles/datastore.user",
+	member: $interpolate`serviceAccount:${apiSa.email}`,
+});
+
 // Running server locally requires impersonating api-sa to mint OIDC
 if (!isProtectedStage && process.env.DEV_USER_EMAIL) {
 	new gcp.serviceaccount.IAMMember("api-sa-dev-impersonate", {

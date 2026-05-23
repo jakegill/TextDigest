@@ -1,0 +1,42 @@
+# dependencies
+node_modules/
+.pnpm-store/
+
+# build outputs
+dist/
+.next/
+out/
+build/
+*.tsbuildinfo
+
+# SST / Pulumi
+.sst/
+Pulumi.*.yaml.bak
+sst-env.d.ts
+sst.pyi
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# env
+.env
+.env.local
+.env.*.local
+
+# logs
+*.log
+npm-debug.log*
+.pnpm-debug.log*
+
+# misc
+.DS_Store
+*.pem
+
+# turbo
+.turbo/

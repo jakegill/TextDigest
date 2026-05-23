@@ -1,0 +1,22 @@
+{
+  "name": "text-digest-v2",
+  "version": "0.0.0",
+  "private": true,
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=22.0.0",
+    "pnpm": ">=10.0.0"
+  },
+  "scripts": {
+    "dev": "bash scripts/dev.sh",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "sst": "^3.17.40",
+    "turbo": "^2.3.3",
+    "typescript": "^5.7.2"
+  }
+}

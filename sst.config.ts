@@ -56,6 +56,7 @@ export default $config({
 		await import("./infra/auth.js");
 		const storage = await import("./infra/blob-storage.js");
 		const nosql = await import("./infra/nosql.js");
+		const gpu = await import("./infra/gpu.js");
 		const cpu = await import("./infra/cpu.js");
 		const gateway = await import("./infra/api-gateway.js");
 		const cdn = await import("./infra/cdn.js");
@@ -64,6 +65,7 @@ export default $config({
 			dataBucket: storage.dataBucket.name,
 			firestoreDb: nosql.firestoreDb.name,
 			apiServiceUrl: cpu.apiServiceUrl,
+			mineruServiceUrl: gpu.mineruServiceUrl,
 			apiGatewayUrl: gateway.apiGatewayUrl,
 			appUrl: cdn.appUrl,
 		};

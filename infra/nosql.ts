@@ -1,8 +1,7 @@
 /// <reference path="./.sst/platform/config.d.ts" />
 
-// Per-stage Firestore database. The shared dev project hosts every personal
-// stage as a separately-named DB.
-//
+// Firestore database.
+
 // Name constraints: lowercase, 4-63 chars, [a-z0-9-], no leading/trailing hyphen.
 
 import { enabledServices } from "./project-services.js";
@@ -15,8 +14,6 @@ export const firestoreDb = new gcp.firestore.Database(
 		name: `td-${$app.stage}`,
 		locationId: "us-central1",
 		type: "FIRESTORE_NATIVE",
-		// ABANDON keeps protected-stage data intact on `sst remove`. DELETE
-		// frees dev resources so per-dev cleanup actually works.
 		deletionPolicy: isProtectedStage ? "ABANDON" : "DELETE",
 	},
 	{ dependsOn: enabledServices },

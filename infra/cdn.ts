@@ -26,8 +26,6 @@ const webBucket = new gcp.storage.Bucket(
 	{ dependsOn: enabledServices },
 );
 
-// Public read at the bucket level — the CDN serves the same content, but
-// direct bucket reads also need to work for the LB backend.
 new gcp.storage.BucketIAMMember("web-public", {
 	bucket: webBucket.name,
 	role: "roles/storage.objectViewer",
@@ -45,7 +43,6 @@ const urlMap = new gcp.compute.URLMap("web-urlmap", {
 	defaultService: backendBucket.id,
 });
 
-// Plain HTTP only. HTTPS requires a managed cert + custom domain.
 const httpProxy = new gcp.compute.TargetHttpProxy("web-http-proxy", {
 	name: `td-${$app.stage}-web-http`,
 	urlMap: urlMap.id,
@@ -62,7 +59,6 @@ export const appUrl = $interpolate`http://${forwardingRule.ipAddress}`;
 export { webBucket };
 
 // Local dev — runs next dev in a multiplexer pane during `sst dev`. No-op on deploy.
-// Frontend talks to the local uvicorn (from infra/cpu.ts's DevCommand), not the deployed gateway.
 new sst.x.DevCommand("WebApp", {
 	dev: {
 		command: "pnpm dev",

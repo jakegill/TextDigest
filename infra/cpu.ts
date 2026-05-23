@@ -68,6 +68,12 @@ new gcp.cloudrunv2.ServiceIamMember("api-invokes-mineru", {
 	member: $interpolate`serviceAccount:${apiSa.email}`,
 });
 
+new gcp.projects.IAMMember("api-vertex-user", {
+	project,
+	role: "roles/aiplatform.user",
+	member: $interpolate`serviceAccount:${apiSa.email}`,
+});
+
 // Running server locally requires impersonating api-sa to mint OIDC
 if (!isProtectedStage && process.env.DEV_USER_EMAIL) {
 	new gcp.serviceaccount.IAMMember("api-sa-dev-impersonate", {
@@ -88,12 +94,27 @@ export const apiService = new gcp.cloudrunv2.Service("api", {
 			{
 				image: apiImage.ref,
 				ports: { containerPort: 8080 },
+				resources: {
+					limits: {
+						cpu: "4",
+						memory: "8Gi",
+					},
+					startupCpuBoost: true,
+				},
 				envs: [
 					{ name: "STAGE", value: $app.stage },
 					{ name: "PROJECT_ID", value: project },
 					{ name: "MINERU_URL", value: mineruServiceUrl },
 					{ name: "DATA_BUCKET", value: dataBucket.name },
+					{ name: "MINERU_TOOLS_CONFIG_JSON", value: "/tmp/mineru-api.json" },
 				],
+				startupProbe: {
+					httpGet: { path: "/health", port: 8080 },
+					initialDelaySeconds: 10,
+					periodSeconds: 5,
+					timeoutSeconds: 3,
+					failureThreshold: 60,
+				},
 			},
 		],
 	},
@@ -121,5 +142,6 @@ new sst.x.DevCommand("Api", {
 		DATA_BUCKET: dataBucket.name,
 		GOOGLE_CLOUD_PROJECT: project,
 		GOOGLE_APPLICATION_CREDENTIALS: process.env.DEV_ADC_PATH ?? "",
+		MINERU_TOOLS_CONFIG_JSON: "/tmp/mineru-api.json",
 	},
 });

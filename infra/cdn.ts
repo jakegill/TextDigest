@@ -6,6 +6,7 @@
 // `apps/app` builds with `output: "export"` into out/. Uploading out/ to
 // webBucket is NOT done here — only the bucket + LB/CDN path are stood up.
 
+import { webAppConfig } from "./auth.js";
 import { enabledServices } from "./project-services.js";
 
 const isProtectedStage = ["staging", "prod"].includes($app.stage);
@@ -70,5 +71,8 @@ new sst.x.DevCommand("WebApp", {
 	},
 	environment: {
 		NEXT_PUBLIC_API_URL: "http://localhost:8080",
+		NEXT_PUBLIC_FIREBASE_API_KEY: webAppConfig.apiKey,
+		NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: webAppConfig.authDomain,
+		NEXT_PUBLIC_FIREBASE_PROJECT_ID: webAppConfig.projectId,
 	},
 });

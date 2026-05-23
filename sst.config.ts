@@ -53,6 +53,7 @@ export default $config({
 
 		await import("./infra/project-services.js");
 
+		await import("./infra/auth.js");
 		const storage = await import("./infra/blob-storage.js");
 		const nosql = await import("./infra/nosql.js");
 		const cpu = await import("./infra/cpu.js");

@@ -1,0 +1,17 @@
+{
+  "name": "@td/infra",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "sst dev",
+    "deploy": "sst deploy",
+    "remove": "sst remove",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "sst": "^3.17.40",
+    "typescript": "^5.7.2"
+  }
+}

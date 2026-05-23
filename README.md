@@ -18,7 +18,7 @@ text-digest/
 
 - Node 22+
 - pnpm 10+
-- Python 3.13 + [`uvicorn`](https://docs.astral.sh/uv/)
+- Python 3.13 + [`uv`](https://docs.astral.sh/uv/)
 - Docker
 - Google Cloud CLI
 - WSL (if using windows - SST requires unix environment)

@@ -13,7 +13,7 @@ import { enabledServices } from "./project-services.js";
 
 const isProtectedStage = ["staging", "prod"].includes($app.stage);
 
-const region = "us-east1";
+const region = "us-central1";
 const project = gcp.config.project!;
 
 const registry = new gcp.artifactregistry.Repository(

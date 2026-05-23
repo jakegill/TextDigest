@@ -32,7 +32,7 @@ export default $config({
 				gcp: {
 					version: "9.25.0",
 					project,
-					region: "us-east1",
+					region: "us-central1",
 				},
 				"docker-build": "0.0.17",
 				command: "1.2.1",

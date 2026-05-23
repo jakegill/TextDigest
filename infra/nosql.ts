@@ -13,7 +13,7 @@ export const firestoreDb = new gcp.firestore.Database(
 	"user-data",
 	{
 		name: `td-${$app.stage}`,
-		locationId: "us-east1",
+		locationId: "us-central1",
 		type: "FIRESTORE_NATIVE",
 		// ABANDON keeps protected-stage data intact on `sst remove`. DELETE
 		// frees dev resources so per-dev cleanup actually works.

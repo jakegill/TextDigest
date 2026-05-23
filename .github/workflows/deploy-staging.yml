@@ -46,7 +46,7 @@ jobs:
             - uses: google-github-actions/setup-gcloud@v2
 
             - name: Configure docker for Artifact Registry
-              run: gcloud auth configure-docker us-east1-docker.pkg.dev --quiet
+              run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
 
             - name: Authenticate to AWS (OIDC — for SST state bucket)
               uses: aws-actions/configure-aws-credentials@v4

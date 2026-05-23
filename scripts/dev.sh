@@ -17,7 +17,7 @@ if [[ -z "$GOOGLE_PROJECT" ]]; then
 fi
 
 # Authenticate docker to push to Artifact Registry. Idempotent (writes ~/.docker/config.json).
-gcloud auth configure-docker us-east1-docker.pkg.dev --quiet
+gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
 
 pnpm exec sst install --print-logs
 

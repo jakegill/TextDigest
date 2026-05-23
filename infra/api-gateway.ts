@@ -53,7 +53,7 @@ const apiConfig = new gcp.apigateway.ApiConfig("api-config", {
 const gateway = new gcp.apigateway.Gateway("api-gateway", {
   gatewayId: `td-${$app.stage}-gateway`,
   apiConfig: apiConfig.id,
-  region: "us-east1",
+  region: "us-central1",
 });
 
 export const apiGatewayUrl = $interpolate`https://${gateway.defaultHostname}`;

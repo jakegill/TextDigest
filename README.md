@@ -107,6 +107,21 @@ Both `staging` and `prod` use `removal: "retain"` — an accidental `sst remove`
     gcloud auth application-default login
     ```
 
+4. Set the active project and the ADC quota project (the latter is required by APIs like `identitytoolkit` that bill the calling project):
+
+    ```bash
+    gcloud config set project <your-dev-project-id>
+    gcloud auth application-default set-quota-project <your-dev-project-id>
+    ```
+
+### Enable Google sign-in (One-time, per GCP project)
+
+In the Firebase console (one click, ever):
+`https://console.firebase.google.com/project/<project-id>/authentication/providers`
+→ click **Google** → toggle **Enable** → pick a support email → **Save**.
+
+Firebase auto-creates the OAuth client behind the scenes — no Cloud Console form, no secrets.
+
 ---
 
 SST stores its Pulumi state in an S3 bucket (No GCP support for SST). Resources still deploy to GCP — AWS is metadata-only.

@@ -1,26 +1,115 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@theme {
+  --font-sans: var(--font-camera-rounded), ui-sans-serif, system-ui, sans-serif;
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+  --color-primary-50: hsl(186, 100%, 94%);
+  --color-primary-100: hsl(185, 94%, 87%);
+  --color-primary-200: hsl(184, 80%, 74%);
+  --color-primary-300: hsl(184, 65%, 59%);
+  --color-primary-400: hsl(185, 57%, 50%);
+  --color-primary-500: hsl(185, 62%, 45%);
+  --color-primary-600: hsl(184, 77%, 34%);
+  --color-primary-700: hsl(185, 81%, 29%);
+  --color-primary-800: hsl(185, 84%, 25%);
+  --color-primary-900: hsl(184, 91%, 17%);
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+  --color-neutral-50: hsl(40, 23%, 97%);
+  --color-neutral-100: hsl(43, 13%, 94%);
+  --color-neutral-200: hsl(40, 15%, 85%);
+  --color-neutral-300: hsl(39, 11%, 69%);
+  --color-neutral-400: hsl(41, 8%, 61%);
+  --color-neutral-500: hsl(41, 8%, 48%);
+  --color-neutral-600: hsl(41, 9%, 35%);
+  --color-neutral-700: hsl(37, 11%, 28%);
+  --color-neutral-800: hsl(40, 13%, 23%);
+  --color-neutral-900: hsl(42, 15%, 13%);
+
+  --color-accent-teal-50: hsl(152, 68%, 96%);
+  --color-accent-teal-100: hsl(154, 75%, 87%);
+  --color-accent-teal-200: hsl(156, 73%, 74%);
+  --color-accent-teal-300: hsl(158, 58%, 62%);
+  --color-accent-teal-400: hsl(160, 51%, 49%);
+  --color-accent-teal-500: hsl(162, 63%, 41%);
+  --color-accent-teal-600: hsl(164, 71%, 34%);
+  --color-accent-teal-700: hsl(166, 72%, 28%);
+  --color-accent-teal-800: hsl(168, 80%, 23%);
+  --color-accent-teal-900: hsl(170, 97%, 15%);
+
+  --color-accent-blue-50: hsl(205, 79%, 92%);
+  --color-accent-blue-100: hsl(205, 97%, 85%);
+  --color-accent-blue-200: hsl(205, 84%, 74%);
+  --color-accent-blue-300: hsl(205, 74%, 65%);
+  --color-accent-blue-400: hsl(205, 65%, 55%);
+  --color-accent-blue-500: hsl(205, 67%, 45%);
+  --color-accent-blue-600: hsl(205, 76%, 39%);
+  --color-accent-blue-700: hsl(205, 82%, 33%);
+  --color-accent-blue-800: hsl(205, 87%, 29%);
+  --color-accent-blue-900: hsl(205, 100%, 21%);
+
+  --color-accent-yellow-50: hsl(45, 100%, 96%);
+  --color-accent-yellow-100: hsl(45, 90%, 88%);
+  --color-accent-yellow-200: hsl(45, 86%, 81%);
+  --color-accent-yellow-300: hsl(43, 90%, 76%);
+  --color-accent-yellow-400: hsl(43, 89%, 70%);
+  --color-accent-yellow-500: hsl(42, 78%, 60%);
+  --color-accent-yellow-600: hsl(42, 63%, 48%);
+  --color-accent-yellow-700: hsl(43, 72%, 37%);
+  --color-accent-yellow-800: hsl(43, 77%, 27%);
+  --color-accent-yellow-900: hsl(43, 86%, 17%);
+
+  --color-accent-yellow-vivid-50: hsl(49, 100%, 96%);
+  --color-accent-yellow-vivid-100: hsl(48, 100%, 88%);
+  --color-accent-yellow-vivid-200: hsl(48, 95%, 76%);
+  --color-accent-yellow-vivid-300: hsl(48, 94%, 68%);
+  --color-accent-yellow-vivid-400: hsl(44, 92%, 63%);
+  --color-accent-yellow-vivid-500: hsl(42, 87%, 55%);
+  --color-accent-yellow-vivid-600: hsl(36, 77%, 49%);
+  --color-accent-yellow-vivid-700: hsl(29, 80%, 44%);
+  --color-accent-yellow-vivid-800: hsl(22, 82%, 39%);
+  --color-accent-yellow-vivid-900: hsl(15, 86%, 30%);
+
+  --color-accent-red-50: hsl(360, 100%, 97%);
+  --color-accent-red-100: hsl(360, 82%, 89%);
+  --color-accent-red-200: hsl(360, 77%, 78%);
+  --color-accent-red-300: hsl(360, 71%, 66%);
+  --color-accent-red-400: hsl(360, 64%, 55%);
+  --color-accent-red-500: hsl(360, 67%, 44%);
+  --color-accent-red-600: hsl(360, 72%, 38%);
+  --color-accent-red-700: hsl(360, 79%, 32%);
+  --color-accent-red-800: hsl(360, 85%, 25%);
+  --color-accent-red-900: hsl(360, 92%, 20%);
+
+  --animate-bounce-right: bounce-right 1.6s infinite;
+
+  @keyframes bounce-right {
+    0%, 100% {
+      transform: translateX(0);
+      animation-timing-function: cubic-bezier(0.8, 0, 1, 1);
+    }
+    50% {
+      transform: translateX(25%);
+      animation-timing-function: cubic-bezier(0, 0, 0.2, 1);
+    }
   }
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
+}
+
+@utility typeface-camera-rounded {
+  font-family: var(--font-camera-rounded), ui-sans-serif, system-ui, sans-serif;
+}
+
+@utility typeface-arizona {
+  font-family: var(--font-arizona), ui-serif, Georgia, serif;
+}
+
+@utility typeface-gaisyr {
+  font-family: var(--font-gaisyr), ui-sans-serif, system-ui, sans-serif;
+}
+
+@utility typeface-gramercy {
+  font-family: var(--font-gramercy), ui-serif, Georgia, serif;
 }

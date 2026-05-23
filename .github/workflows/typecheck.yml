@@ -1,0 +1,44 @@
+name: typecheck
+
+# Runs on every PR open / sync against staging or prod. This is the gate
+# enforced by branch protection — neither deploy workflow runs unless this
+# check is green on the merge commit.
+
+on:
+  pull_request:
+    branches: [staging, prod]
+
+permissions:
+  contents: read
+
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # SST install materializes provider type defs into infra/.sst/platform/
+      # so the @td/infra typecheck can resolve `gcp`, `sst`, etc. globals.
+      # No GCP credentials needed — provider binaries come from a CDN.
+      - name: Materialize SST platform types
+        run: pnpm exec sst install
+
+      - name: Typecheck all packages
+        run: pnpm exec turbo run typecheck

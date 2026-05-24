@@ -9,6 +9,7 @@ from google.genai import types
 from pydantic import BaseModel
 
 from ..dependencies import PROJECT_ID
+from ..models.titles import DocTocEntry, SkeletonEntry, TocEntry
 from . import vector_index
 from .llm import GEMINI_2_5_FLASH, GEMINI_3_1_FLASH_LITE
 
@@ -16,26 +17,6 @@ VERTEX_LOCATION = "us-central1"
 EARLY_PAGES = 10
 
 _client = genai.Client(vertexai=True, project=PROJECT_ID, location=VERTEX_LOCATION)
-
-
-class TocEntry(BaseModel):
-    title: str
-    level: int
-    pdfPage: int
-    anchor: str
-
-
-class SkeletonEntry(BaseModel):
-    title: str
-    level: int
-    pdfPage: int
-    anchor: str
-
-
-class DocTocEntry(BaseModel):
-    title: str
-    statedPage: int | None
-    level: int
 
 
 class _DocTocResult(BaseModel):

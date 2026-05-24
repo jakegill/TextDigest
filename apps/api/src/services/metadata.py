@@ -1,8 +1,8 @@
 from google import genai
 from google.genai import types
-from pydantic import BaseModel
 
 from ..dependencies import PROJECT_ID
+from ..models.titles import CoverMetadata
 
 GEMINI_MODEL = "gemini-2.5-flash"
 VERTEX_LOCATION = "us-central1"
@@ -10,12 +10,7 @@ VERTEX_LOCATION = "us-central1"
 _client = genai.Client(vertexai=True, project=PROJECT_ID, location=VERTEX_LOCATION)
 
 
-class TitleMetadata(BaseModel):
-    title: str
-    author: str
-
-
-def extract_from_cover(cover_png: bytes) -> TitleMetadata:
+def extract_from_cover(cover_png: bytes) -> CoverMetadata:
     response = _client.models.generate_content(
         model=GEMINI_MODEL,
         contents=[
@@ -25,7 +20,7 @@ def extract_from_cover(cover_png: bytes) -> TitleMetadata:
         ],
         config=types.GenerateContentConfig(
             response_mime_type="application/json",
-            response_schema=TitleMetadata,
+            response_schema=CoverMetadata,
         ),
     )
-    return TitleMetadata.model_validate_json(response.text)
+    return CoverMetadata.model_validate_json(response.text)

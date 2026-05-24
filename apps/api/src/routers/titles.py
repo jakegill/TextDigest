@@ -3,9 +3,9 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, UploadFile, status
 
-from ..dependencies import get_current_uid
+from ..middleware.auth import get_current_uid
+from ..models.titles import Title, TitleMetadata
 from ..services import titles as titles_service
-from ..services.titles import Title, TitleMetadata
 
 router = APIRouter(prefix="/titles", tags=["titles"])
 

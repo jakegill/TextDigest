@@ -4,30 +4,14 @@ import logging
 import time
 import uuid
 from contextlib import contextmanager
-from datetime import datetime
 from typing import Iterator
 
 from fastapi import HTTPException, status
-from pydantic import BaseModel
 
+from ..models.titles import Title, TitleMetadata, TocEntry
 from . import cover, firestore, metadata, mineru, storage, toc, vector_index
-from .toc import TocEntry
 
 logger = logging.getLogger("uvicorn.error")
-
-
-class TitleMetadata(BaseModel):
-    titleId: str
-    title: str
-    author: str
-    coverUrl: str
-    createdAt: datetime
-
-
-class Title(TitleMetadata):
-    markdownUrl: str
-    toc: list[TocEntry]
-    tocSource: str
 
 
 def list_for_user(uid: str) -> list[TitleMetadata]:

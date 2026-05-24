@@ -1,7 +1,7 @@
 from google.cloud.firestore import SERVER_TIMESTAMP, Query
 
 from ..dependencies import firestore_client
-from .toc import TocEntry
+from ..models.titles import TocEntry
 
 
 def write_title(

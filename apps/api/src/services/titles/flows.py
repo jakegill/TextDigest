@@ -6,52 +6,12 @@ import uuid
 from contextlib import contextmanager
 from typing import Iterator
 
-from fastapi import HTTPException, status
+from google.cloud.firestore import SERVER_TIMESTAMP
 
-from ..models.titles import Title, TitleMetadata, TocEntry
-from . import cover, firestore, metadata, mineru, storage, toc, vector_index
+from ...dependencies import bucket, firestore_client
+from . import cover, mineru, toc, vector_index
 
 logger = logging.getLogger("uvicorn.error")
-
-
-def list_for_user(uid: str) -> list[TitleMetadata]:
-    return [_to_metadata(d) for d in firestore.list_titles(uid)]
-
-
-def get_for_user(uid: str, title_id: str) -> Title:
-    d = firestore.get_title(uid, title_id)
-    if d is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="title not found")
-    return _to_title(d)
-
-
-def delete_for_user(uid: str, title_id: str) -> None:
-    # GCS first — if Firestore wipe fails the doc still references the blobs.
-    storage.delete_prefix(f"users/{uid}/titles/{title_id}/")
-    firestore.delete_title(uid, title_id)
-
-
-def _to_metadata(d: dict) -> TitleMetadata:
-    return TitleMetadata(
-        titleId=d["titleId"],
-        title=d["title"],
-        author=d["author"],
-        coverUrl=storage.signed_url(d["coverKey"]),
-        createdAt=d["createdAt"],
-    )
-
-
-def _to_title(d: dict) -> Title:
-    return Title(
-        titleId=d["titleId"],
-        title=d["title"],
-        author=d["author"],
-        coverUrl=storage.signed_url(d["coverKey"]),
-        markdownUrl=storage.signed_url(d["parsedMdKey"]),
-        toc=[TocEntry(**e) for e in (d.get("toc") or [])],
-        tocSource=d.get("tocSource") or "skeleton",
-        createdAt=d["createdAt"],
-    )
 
 
 @contextmanager
@@ -62,6 +22,10 @@ def timed(title_id: str, step: str) -> Iterator[None]:
         yield
     finally:
         logger.info("[%s] %s done in %.2fs", title_id, step, time.perf_counter() - t0)
+
+
+def _upload(key: str, data: bytes, content_type: str) -> None:
+    bucket.blob(key).upload_from_string(data, content_type=content_type)
 
 
 async def ingest(uid: str, pdf_bytes: bytes, filename: str | None) -> dict[str, object]:
@@ -82,16 +46,16 @@ async def ingest(uid: str, pdf_bytes: bytes, filename: str | None) -> dict[str, 
     toc_key = f"users/{uid}/titles/{title_id}/toc.json"
 
     with timed(title_id, "upload source.pdf → gcs"):
-        storage.upload_bytes(source_key, pdf_bytes, "application/pdf")
+        _upload(source_key, pdf_bytes, "application/pdf")
 
     with timed(title_id, "render cover.png"):
         cover_png = await asyncio.to_thread(cover.render_first_page_png, pdf_bytes)
 
     with timed(title_id, "upload cover.png → gcs"):
-        storage.upload_bytes(cover_key, cover_png, "image/png")
+        _upload(cover_key, cover_png, "image/png")
 
     with timed(title_id, "gemini metadata extract"):
-        meta = await asyncio.to_thread(metadata.extract_from_cover, cover_png)
+        meta = await asyncio.to_thread(cover.extract_metadata, cover_png)
 
     with timed(title_id, "mineru parse"):
         parse_result = await mineru.parse_pdf(title_id, pdf_bytes)
@@ -103,10 +67,10 @@ async def ingest(uid: str, pdf_bytes: bytes, filename: str | None) -> dict[str, 
     )
 
     with timed(title_id, "upload parsed.md → gcs"):
-        storage.upload_bytes(parsed_md_key, parsed.encode("utf-8"), "text/markdown")
+        _upload(parsed_md_key, parsed.encode("utf-8"), "text/markdown")
 
     with timed(title_id, "upload content_list.json → gcs"):
-        storage.upload_bytes(
+        _upload(
             content_list_key,
             json.dumps(content_list).encode("utf-8"),
             "application/json",
@@ -125,7 +89,7 @@ async def ingest(uid: str, pdf_bytes: bytes, filename: str | None) -> dict[str, 
     )
 
     with timed(title_id, "upload toc.json → gcs"):
-        storage.upload_bytes(
+        _upload(
             toc_key,
             json.dumps([e.model_dump() for e in toc_entries]).encode("utf-8"),
             "application/json",
@@ -133,7 +97,7 @@ async def ingest(uid: str, pdf_bytes: bytes, filename: str | None) -> dict[str, 
 
     with timed(title_id, "firestore write"):
         await asyncio.to_thread(
-            firestore.write_title,
+            _write_title_doc,
             uid,
             title_id,
             title=meta.title,
@@ -167,3 +131,35 @@ async def ingest(uid: str, pdf_bytes: bytes, filename: str | None) -> dict[str, 
         "tocSource": toc_source,
         "chunkCount": n_chunks,
     }
+
+
+def _write_title_doc(
+    uid: str,
+    title_id: str,
+    *,
+    title: str,
+    author: str,
+    source_key: str,
+    parsed_md_key: str,
+    cover_key: str,
+    content_list_key: str,
+    toc_key: str,
+    toc: list,
+    toc_source: str,
+) -> None:
+    firestore_client.collection("users").document(uid).collection("titles").document(
+        title_id
+    ).set(
+        {
+            "title": title,
+            "author": author,
+            "sourceKey": source_key,
+            "parsedMdKey": parsed_md_key,
+            "coverKey": cover_key,
+            "contentListKey": content_list_key,
+            "tocKey": toc_key,
+            "toc": [e.model_dump() for e in toc],
+            "tocSource": toc_source,
+            "createdAt": SERVER_TIMESTAMP,
+        }
+    )

@@ -7,8 +7,8 @@ from google.cloud.firestore_v1.vector import Vector
 from google.genai import types
 from llama_index.core.node_parser import SentenceSplitter
 
-from ..dependencies import PROJECT_ID, firestore_client
-from .llm import GEMINI_EMBEDDING_001
+from ...dependencies import PROJECT_ID, firestore_client
+from .constants import GEMINI_EMBEDDING_001
 
 EMBED_DIM = 768
 VERTEX_LOCATION = "us-central1"

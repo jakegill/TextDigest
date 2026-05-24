@@ -10,8 +10,8 @@ from google.auth.transport.requests import Request as GoogleRequest
 from google.oauth2 import id_token
 from mineru.cli.common import do_parse
 
-from ..dependencies import MINERU_URL
-from .llm import GEMINI_2_5_FLASH, GEMINI_3_1_FLASH_LITE
+from ...dependencies import MINERU_URL
+from .constants import GEMINI_2_5_FLASH, GEMINI_3_1_FLASH_LITE
 
 
 @dataclass(slots=True)

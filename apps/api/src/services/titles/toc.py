@@ -8,10 +8,10 @@ from google import genai
 from google.genai import types
 from pydantic import BaseModel
 
-from ..dependencies import PROJECT_ID
-from ..models.titles import DocTocEntry, SkeletonEntry, TocEntry
+from ...dependencies import PROJECT_ID
+from ...models.titles import DocTocEntry, SkeletonEntry, TocEntry
 from . import vector_index
-from .llm import GEMINI_2_5_FLASH, GEMINI_3_1_FLASH_LITE
+from .constants import GEMINI_2_5_FLASH, GEMINI_3_1_FLASH_LITE
 
 VERTEX_LOCATION = "us-central1"
 EARLY_PAGES = 10

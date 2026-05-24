@@ -18,3 +18,18 @@ export const firestoreDb = new gcp.firestore.Database(
 	},
 	{ dependsOn: enabledServices },
 );
+
+new gcp.firestore.Index(
+	"chunks-embedding",
+	{
+		database: firestoreDb.name,
+		collection: "chunks",
+		queryScope: "COLLECTION_GROUP",
+		apiScope: "ANY_API",
+		fields: [
+			{ fieldPath: "__name__", order: "ASCENDING" },
+			{ fieldPath: "embedding", vectorConfig: { dimension: 768, flat: {} } },
+		],
+	},
+	{ dependsOn: [firestoreDb] },
+);

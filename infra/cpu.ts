@@ -144,6 +144,7 @@ new sst.x.DevCommand("Api", {
 		autostart: true,
 	},
 	environment: {
+		STAGE: $app.stage,
 		MINERU_URL: mineruServiceUrl,
 		DATA_BUCKET: dataBucket.name,
 		GOOGLE_CLOUD_PROJECT: project,

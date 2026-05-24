@@ -2,6 +2,7 @@ import asyncio
 import json
 import os
 import tempfile
+from dataclasses import dataclass
 from pathlib import Path
 
 import google.auth
@@ -10,10 +11,21 @@ from google.oauth2 import id_token
 from mineru.cli.common import do_parse
 
 from ..dependencies import MINERU_URL
+from .llm import GEMINI_2_5_FLASH, GEMINI_3_1_FLASH_LITE
+
+
+@dataclass(slots=True)
+class ParseResult:
+    markdown: str
+    content_list: list[dict]
+
 
 VERTEX_LOCATION = "us-central1"
-GEMINI_MODEL = "google/gemini-2.5-flash"
-LLM_AIDED_SECTIONS = ("title_aided", "text_aided", "formula_aided")
+LLM_AIDED_MODELS = {
+    "title_aided": f"google/{GEMINI_3_1_FLASH_LITE}",
+    "text_aided": f"google/{GEMINI_3_1_FLASH_LITE}",
+    "formula_aided": f"google/{GEMINI_2_5_FLASH}",
+}
 
 
 def write_mineru_config() -> None:
@@ -31,10 +43,10 @@ def write_mineru_config() -> None:
             section: {
                 "api_key": creds.token,
                 "base_url": base_url,
-                "model": GEMINI_MODEL,
+                "model": model,
                 "enable": True,
             }
-            for section in LLM_AIDED_SECTIONS
+            for section, model in LLM_AIDED_MODELS.items()
         }
     }
     cfg_path = os.environ.get("MINERU_TOOLS_CONFIG_JSON") or str(
@@ -43,7 +55,7 @@ def write_mineru_config() -> None:
     Path(cfg_path).write_text(json.dumps(config))
 
 
-async def parse_pdf(title_id: str, pdf_bytes: bytes) -> str:
+async def parse_pdf(title_id: str, pdf_bytes: bytes) -> ParseResult:
     os.environ["MINERU_VL_API_KEY"] = id_token.fetch_id_token(
         GoogleRequest(), MINERU_URL
     )
@@ -59,7 +71,16 @@ async def parse_pdf(title_id: str, pdf_bytes: bytes) -> str:
             backend="hybrid-http-client",
             server_url=MINERU_URL,
         )
-        md_files = list((Path(tmp) / title_id).rglob(f"{title_id}.md"))
+        root = Path(tmp) / title_id
+        md_files = list(root.rglob(f"{title_id}.md"))
         if not md_files:
-            raise RuntimeError(f"mineru wrote no {title_id}.md under {tmp}/{title_id}/")
-        return md_files[0].read_text(encoding="utf-8")
+            raise RuntimeError(f"mineru wrote no {title_id}.md under {root}/")
+        cl_files = list(root.rglob(f"{title_id}_content_list.json"))
+        if not cl_files:
+            raise RuntimeError(
+                f"mineru wrote no {title_id}_content_list.json under {root}/"
+            )
+        return ParseResult(
+            markdown=md_files[0].read_text(encoding="utf-8"),
+            content_list=json.loads(cl_files[0].read_text(encoding="utf-8")),
+        )

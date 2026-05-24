@@ -33,6 +33,14 @@ paths:
                                 type: string
                                 example: ok
     /titles:
+        get:
+            summary: List the caller's titles
+            operationId: listTitles
+            x-google-backend:
+                address: BACKEND_URL/titles
+            responses:
+                "200":
+                    description: Array of title metadata.
         post:
             summary: Upload a PDF for parsing
             operationId: uploadTitle
@@ -42,3 +50,27 @@ paths:
             responses:
                 "200":
                     description: Parsed and stored.
+    /titles/{title_id}:
+        parameters:
+            - name: title_id
+              in: path
+              required: true
+              type: string
+        get:
+            summary: Get a single title with signed cover/markdown URLs and TOC
+            operationId: getTitle
+            x-google-backend:
+                address: BACKEND_URL/titles/{title_id}
+            responses:
+                "200":
+                    description: Title.
+                "404":
+                    description: Not found.
+        delete:
+            summary: Delete a title (Firestore + GCS, including chunks)
+            operationId: deleteTitle
+            x-google-backend:
+                address: BACKEND_URL/titles/{title_id}
+            responses:
+                "204":
+                    description: Deleted.

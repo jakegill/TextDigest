@@ -80,6 +80,13 @@ new gcp.projects.IAMMember("api-firestore-user", {
 	member: $interpolate`serviceAccount:${apiSa.email}`,
 });
 
+// v4 signed URLs require the signer to mint tokens on its own behalf
+new gcp.serviceaccount.IAMMember("api-sa-self-sign", {
+	serviceAccountId: apiSa.name,
+	role: "roles/iam.serviceAccountTokenCreator",
+	member: $interpolate`serviceAccount:${apiSa.email}`,
+});
+
 // Running server locally requires impersonating api-sa to mint OIDC
 if (!isProtectedStage && process.env.DEV_USER_EMAIL) {
 	new gcp.serviceaccount.IAMMember("api-sa-dev-impersonate", {

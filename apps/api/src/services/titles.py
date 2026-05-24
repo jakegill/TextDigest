@@ -4,11 +4,70 @@ import logging
 import time
 import uuid
 from contextlib import contextmanager
+from datetime import datetime
 from typing import Iterator
 
+from fastapi import HTTPException, status
+from pydantic import BaseModel
+
 from . import cover, firestore, metadata, mineru, storage, toc, vector_index
+from .toc import TocEntry
 
 logger = logging.getLogger("uvicorn.error")
+
+
+class TitleMetadata(BaseModel):
+    titleId: str
+    title: str
+    author: str
+    coverUrl: str
+    createdAt: datetime
+
+
+class Title(TitleMetadata):
+    markdownUrl: str
+    toc: list[TocEntry]
+    tocSource: str
+
+
+def list_for_user(uid: str) -> list[TitleMetadata]:
+    return [_to_metadata(d) for d in firestore.list_titles(uid)]
+
+
+def get_for_user(uid: str, title_id: str) -> Title:
+    d = firestore.get_title(uid, title_id)
+    if d is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="title not found")
+    return _to_title(d)
+
+
+def delete_for_user(uid: str, title_id: str) -> None:
+    # GCS first — if Firestore wipe fails the doc still references the blobs.
+    storage.delete_prefix(f"users/{uid}/titles/{title_id}/")
+    firestore.delete_title(uid, title_id)
+
+
+def _to_metadata(d: dict) -> TitleMetadata:
+    return TitleMetadata(
+        titleId=d["titleId"],
+        title=d["title"],
+        author=d["author"],
+        coverUrl=storage.signed_url(d["coverKey"]),
+        createdAt=d["createdAt"],
+    )
+
+
+def _to_title(d: dict) -> Title:
+    return Title(
+        titleId=d["titleId"],
+        title=d["title"],
+        author=d["author"],
+        coverUrl=storage.signed_url(d["coverKey"]),
+        markdownUrl=storage.signed_url(d["parsedMdKey"]),
+        toc=[TocEntry(**e) for e in (d.get("toc") or [])],
+        tocSource=d.get("tocSource") or "skeleton",
+        createdAt=d["createdAt"],
+    )
 
 
 @contextmanager

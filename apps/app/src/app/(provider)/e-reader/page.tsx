@@ -2,7 +2,7 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { ArrowLeftIcon, CircleNotchIcon, ListBulletsIcon } from "@phosphor-icons/react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import rehypeAutolinkHeadings from "rehype-autolink-headings";
 import rehypeHighlight from "rehype-highlight";
@@ -342,22 +342,7 @@ function ReaderShell({ titleId, title }: { titleId: string; title: TitleData }) 
 
 	const parentRef = useRef<HTMLDivElement | null>(null);
 	const hasInitializedSaveRef = useRef(false);
-
-	const setSentinel = useCallback((el: HTMLDivElement | null) => {
-		if (!el || !parentRef.current) return;
-		const obs = new IntersectionObserver(
-			(entries) => {
-				if (entries.some((e) => e.isIntersecting)) {
-					requestAnimationFrame(() => {
-						setIsLoading(false);
-						obs.disconnect();
-					});
-				}
-			},
-			{ root: parentRef.current, threshold: 0 },
-		);
-		obs.observe(el);
-	}, []);
+	const hasInitializedScrollRef = useRef(false);
 
 	const questions = useQuestions();
 
@@ -366,8 +351,19 @@ function ReaderShell({ titleId, title }: { titleId: string; title: TitleData }) 
 		getScrollElement: () => parentRef.current,
 		estimateSize: () => 1000,
 		overscan: 8,
-		initialOffset: initialPageNumber * 1000,
 	});
+
+	useLayoutEffect(() => {
+		if (hasInitializedScrollRef.current) return;
+		if (pages.length === 0) return;
+		hasInitializedScrollRef.current = true;
+
+		const target = Math.min(Math.max(0, initialPageNumber), pages.length - 1);
+		if (target > 0) {
+			virtualizer.scrollToIndex(target, { align: "start" });
+		}
+		setIsLoading(false);
+	}, [pages.length, initialPageNumber, virtualizer]);
 
 	useEffect(() => {
 		let cancelled = false;
@@ -447,9 +443,10 @@ function ReaderShell({ titleId, title }: { titleId: string; title: TitleData }) 
 
 				<div
 					ref={parentRef}
-					className="h-full w-full overflow-x-hidden overflow-y-auto overscroll-contain px-4 md:px-32 lg:px-48 xl:px-96 2xl:px-[33svw]"
+					className="h-full w-full overflow-x-hidden overflow-y-auto select-none px-4 md:px-32 lg:px-48 xl:px-96 2xl:px-[33svw]"
 				>
 					<div
+						className="select-text"
 						style={{
 							height: `${virtualizer.getTotalSize()}px`,
 							width: "100%",
@@ -469,7 +466,6 @@ function ReaderShell({ titleId, title }: { titleId: string; title: TitleData }) 
 									transform: `translateY(${virtualItem.start}px)`,
 								}}
 							>
-								{virtualItem.index === initialPageNumber && <div ref={setSentinel} className="h-px w-px" />}
 								{pages[virtualItem.index]?.map((row, i) => {
 									const lonelyWide = row.items.length === 1 && isWide(row.items[0].bbox);
 									if (lonelyWide) {

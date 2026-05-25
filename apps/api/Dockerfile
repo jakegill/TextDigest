@@ -15,6 +15,9 @@ ENV UV_LINK_MODE=copy \
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project
 
+RUN /app/.venv/bin/playwright install-deps chromium \
+ && /app/.venv/bin/playwright install chromium
+
 COPY src ./src
 
 ENV PATH="/app/.venv/bin:${PATH}"

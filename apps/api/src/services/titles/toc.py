@@ -38,11 +38,21 @@ def _slugify(text: str, seen: Counter) -> str:
     return s if n == 0 else f"{s}-{n}"
 
 
+def _is_heading_block(b: dict) -> bool:
+    t = b.get("type")
+    if t == "title":
+        return True
+    # MinerU v1 content_list emits headings as type="text" with text_level set.
+    if t == "text" and b.get("text_level"):
+        return True
+    return False
+
+
 def heading_skeleton(content_list: list[dict]) -> list[SkeletonEntry]:
     seen: Counter = Counter()
     out: list[SkeletonEntry] = []
     for b in content_list:
-        if b.get("type") != "title":
+        if not _is_heading_block(b):
             continue
         text = (b.get("text") or "").strip()
         if not text:
@@ -85,6 +95,7 @@ class _AgentState:
     by_page: dict[int, list[dict]] = field(default_factory=dict)
     total_pages: int = 0
     submitted: list[dict] | None = None
+    tool_call_count: int = 0
 
 
 def _build_tools(state: _AgentState) -> list:
@@ -99,13 +110,20 @@ def _build_tools(state: _AgentState) -> list:
             with newlines, truncated to ~4000 chars. Empty string if the page
             has no extracted content or is out of range.
         """
+        state.tool_call_count += 1
         idx = page_number - 1
         if idx < 0 or idx not in state.by_page:
+            logger.debug(f"[toc.tool] get_page_contents(page_number={page_number}) -> empty (out of range)")
             return ""
         parts = [_block_to_text(b) for b in state.by_page[idx]]
         joined = "\n".join(p for p in parts if p)
-        if len(joined) > PAGE_CONTENTS_TRUNCATE:
-            return joined[:PAGE_CONTENTS_TRUNCATE] + "\n[…truncated…]"
+        truncated = len(joined) > PAGE_CONTENTS_TRUNCATE
+        if truncated:
+            joined = joined[:PAGE_CONTENTS_TRUNCATE] + "\n[…truncated…]"
+        logger.debug(
+            f"[toc.tool] get_page_contents(page_number={page_number}) -> "
+            f"{len(joined)} chars (truncated={truncated})"
+        )
         return joined
 
     def get_page_headings(page_number: int) -> list[dict]:
@@ -122,6 +140,7 @@ def _build_tools(state: _AgentState) -> list:
             level (int 1-4), anchor (str), skeleton_index (int — the index
             into the skeleton, useful for ordering). Empty list if none.
         """
+        state.tool_call_count += 1
         out: list[dict] = []
         for i, s in enumerate(state.skeleton):
             if s.pdfPage == page_number:
@@ -133,6 +152,9 @@ def _build_tools(state: _AgentState) -> list:
                         "skeleton_index": i,
                     }
                 )
+        logger.debug(
+            f"[toc.tool] get_page_headings(page_number={page_number}) -> {len(out)} headings"
+        )
         return out
 
     def find_heading(
@@ -158,6 +180,7 @@ def _build_tools(state: _AgentState) -> list:
             Up to 5 candidates, each with skeleton_index, title, level,
             pdfPage, anchor, and match_score (0-100).
         """
+        state.tool_call_count += 1
         if not query.strip():
             return []
         candidates = [
@@ -167,6 +190,10 @@ def _build_tools(state: _AgentState) -> list:
             and (after_skeleton_index < 0 or i > after_skeleton_index)
         ]
         if not candidates:
+            logger.debug(
+                f"[toc.tool] find_heading(query={query!r}, level_hint={level_hint}, "
+                f"after={after_skeleton_index}) -> no candidates"
+            )
             return []
         choices = {i: s.title for i, s in candidates}
         matches = process.extract(
@@ -185,6 +212,10 @@ def _build_tools(state: _AgentState) -> list:
                     "match_score": int(score),
                 }
             )
+        logger.debug(
+            f"[toc.tool] find_heading(query={query!r}) -> {len(out)} candidates "
+            f"(top_score={out[0]['match_score'] if out else None})"
+        )
         return out
 
     def submit_toc(entries_json: str) -> str:
@@ -202,12 +233,19 @@ def _build_tools(state: _AgentState) -> list:
         Returns:
             "ok" on success, or an error message for malformed JSON.
         """
+        state.tool_call_count += 1
         try:
             parsed = json.loads(entries_json)
         except json.JSONDecodeError as e:
+            logger.warning(f"[toc.tool] submit_toc invalid JSON: {e}")
             return f"error: invalid JSON: {e}"
         if not isinstance(parsed, list):
+            logger.warning(f"[toc.tool] submit_toc not an array: {type(parsed).__name__}")
             return "error: expected a JSON array at the top level"
+        logger.info(f"[toc.tool] submit_toc received {len(parsed)} entries")
+        if parsed:
+            preview = parsed[:5]
+            logger.debug(f"[toc.tool] submit_toc preview: {preview}")
         state.submitted = parsed
         return "ok"
 
@@ -234,14 +272,17 @@ def _validate_submitted(
 ) -> list[TocEntry]:
     seen: Counter = Counter()
     out: list[TocEntry] = []
+    dropped = 0
     for raw in raw_entries:
         try:
             cand = _TocEntryCandidate.model_validate(raw)
         except (ValidationError, TypeError) as e:
             logger.warning(f"[toc] dropping invalid entry {raw!r}: {e}")
+            dropped += 1
             continue
         if cand.level < 1 or cand.level > 4 or cand.pdfPage < 1:
             logger.warning(f"[toc] dropping out-of-range entry {raw!r}")
+            dropped += 1
             continue
         anchor = _resolve_anchor(cand.title, cand.pdfPage, skeleton, seen)
         out.append(
@@ -252,6 +293,9 @@ def _validate_submitted(
                 anchor=anchor,
             )
         )
+    logger.info(
+        f"[toc] validated {len(out)}/{len(raw_entries)} entries; dropped={dropped}"
+    )
     return out
 
 
@@ -265,6 +309,10 @@ def _run_toc_agent(
         skeleton=skeleton, by_page=by_page, total_pages=total_pages
     )
     tools = _build_tools(state)
+    logger.info(
+        f"[toc] agent start: prompt_chars={len(prompt)}, total_pages={total_pages}, "
+        f"skeleton_size={len(skeleton)}, max_tool_calls={MAX_TOOL_CALLS}"
+    )
     try:
         _client.models.generate_content(
             model=GEMINI_2_5_FLASH,
@@ -278,6 +326,11 @@ def _run_toc_agent(
         )
     except Exception:
         logger.exception("[toc] agent call failed")
+
+    logger.info(
+        f"[toc] agent done: tool_calls={state.tool_call_count}, "
+        f"submitted={'None' if state.submitted is None else len(state.submitted)}"
+    )
 
     if state.submitted is None:
         logger.error("[toc] agent never called submit_toc")
@@ -316,14 +369,34 @@ def extract_toc(
     uid: str, title_id: str, content_list: list[dict]
 ) -> tuple[list[TocEntry], str]:
     del uid, title_id
+    type_counts = Counter(b.get("type") for b in content_list)
+    logger.info(
+        f"[toc] extract start: content_list={len(content_list)} blocks; "
+        f"types={dict(type_counts)}"
+    )
+
     skeleton = heading_skeleton(content_list)
+    level_counts = Counter(s.level for s in skeleton)
+    logger.info(
+        f"[toc] skeleton built: {len(skeleton)} headings; "
+        f"level_counts={dict(sorted(level_counts.items()))}"
+    )
     if not skeleton:
+        logger.warning(
+            "[toc] empty skeleton — no headings detected in content_list. "
+            f"Top types present: {dict(type_counts.most_common(5))}"
+        )
         return [], "skeleton"
 
     by_page = _index_by_page(content_list)
     total_pages = (max(by_page.keys()) + 1) if by_page else 0
     first_pages_text = _format_first_pages(by_page, FIRST_PAGES_TO_SHOW)
     skeleton_hint = _format_top_level_hint(skeleton)
+    logger.info(
+        f"[toc] prepared agent inputs: total_pages={total_pages}, "
+        f"first_pages_chars={len(first_pages_text)}, "
+        f"skeleton_hint_lines={skeleton_hint.count(chr(10)) + 1}"
+    )
 
     prompt = (
         "You are building a Table of Contents for an e-reader. Output is JSON: "
@@ -371,7 +444,12 @@ def extract_toc(
 
     entries = _run_toc_agent(prompt, skeleton, by_page, total_pages)
     if entries:
+        logger.info(f"[toc] extract done: {len(entries)} entries (source=doc)")
         return entries, "doc"
 
-    logger.warning("[toc] agent failed, returning level-1/2 fallback")
-    return _fallback_top_level_toc(skeleton), "skeleton"
+    fallback = _fallback_top_level_toc(skeleton)
+    logger.warning(
+        f"[toc] agent produced no usable entries; falling back to "
+        f"level-1/2 skeleton ({len(fallback)} entries)"
+    )
+    return fallback, "skeleton"

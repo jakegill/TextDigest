@@ -34,9 +34,16 @@ class TitleMetadata(BaseModel):
     author: str
     coverUrl: str
     createdAt: datetime
+    isProcessing: bool
+    processingError: str | None = None
+    lastViewed: datetime | None = None
+    pageNumber: int | None = None
 
 
 class Title(TitleMetadata):
-    markdownUrl: str
-    toc: list[TocEntry]
-    tocSource: str
+    # markdownUrl, toc, tocSource are populated once the parse + toc stages
+    # complete. While isProcessing is true (or if processing failed), they may
+    # still be null / empty.
+    markdownUrl: str | None = None
+    toc: list[TocEntry] = []
+    tocSource: str | None = None

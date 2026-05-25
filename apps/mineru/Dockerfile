@@ -2,7 +2,7 @@ FROM vllm/vllm-openai:v0.11.2
 
 ENV PYTHONUNBUFFERED=1
 
-RUN pip install --no-cache-dir "mineru[core]==3.1.15" "huggingface_hub[cli]"
+RUN pip install --no-cache-dir "mineru[core] @ git+https://github.com/jakegill/MinerU.git@master" "huggingface_hub[cli]"
 
 RUN huggingface-cli download opendatalab/MinerU2.5-Pro-2605-1.2B \
       --local-dir /models/MinerU2.5-Pro-2605-1.2B

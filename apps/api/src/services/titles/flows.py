@@ -61,6 +61,23 @@ async def stage_upload(
     return task_id, source_key
 
 
+async def stage_agent_capture(
+    uid: str, pdf_bytes: bytes, filename: str | None
+) -> tuple[str, str]:
+    """Stages PDF bytes captured by the verify subagent to a separate prefix.
+    No progress.init — so unclicked candidates don't show as pending in the
+    library UI. Returns (task_id, source_key)."""
+    task_id = str(uuid.uuid4())
+    source_key = f"users/{uid}/agent-staged/{task_id}/source.pdf"
+    logger.info(
+        "[%s] uid=%s agent capture stage: %s (%.1f KB)",
+        task_id, uid, filename, len(pdf_bytes) / 1024,
+    )
+    with timed(task_id, "upload agent-staged source.pdf → gcs"):
+        await asyncio.to_thread(_upload, source_key, pdf_bytes, "application/pdf")
+    return task_id, source_key
+
+
 async def stage_process(
     uid: str, task_id: str, source_key: str, filename: str | None
 ) -> None:

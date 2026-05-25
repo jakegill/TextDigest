@@ -5,64 +5,73 @@ from google.cloud.firestore import ArrayUnion, Query, SERVER_TIMESTAMP
 
 from ...dependencies import firestore_client
 
+_COLLECTIONS = {
+    "questions": "agent_conversations",
+    "title-finder": "find_title_conversations",
+}
 
-def _collection(uid: str):
+
+def _collection(uid: str, agent: str):
+    name = _COLLECTIONS.get(agent)
+    if not name:
+        raise ValueError(f"unknown agent: {agent!r}")
     return (
         firestore_client.collection("users")
         .document(uid)
-        .collection("agent_conversations")
+        .collection(name)
     )
 
 
-def _doc(uid: str, conversation_id: str):
-    return _collection(uid).document(conversation_id)
+def _doc(uid: str, agent: str, conversation_id: str):
+    return _collection(uid, agent).document(conversation_id)
 
 
 def append_turn(
     uid: str,
     agent: str,
     conversation_id: str,
-    title_id: str,
-    title: str,
-    author: str,
     user_msg: str,
     assistant_msg: str,
+    *,
+    doc_meta: dict[str, Any] | None = None,
+    assistant_meta: dict[str, Any] | None = None,
 ) -> None:
-    ref = _doc(uid, conversation_id)
+    ref = _doc(uid, agent, conversation_id)
     snap = ref.get()
     now = datetime.now(timezone.utc).isoformat()
+    assistant_turn: dict[str, Any] = {"role": "assistant", "content": assistant_msg, "ts": now}
+    if assistant_meta:
+        assistant_turn.update(assistant_meta)
     turn = [
         {"role": "user", "content": user_msg, "ts": now},
-        {"role": "assistant", "content": assistant_msg, "ts": now},
+        assistant_turn,
     ]
     if snap.exists:
         ref.update({"messages": ArrayUnion(turn), "updatedAt": SERVER_TIMESTAMP})
     else:
-        ref.set(
-            {
-                "uid": uid,
-                "agent": agent,
-                "titleId": title_id,
-                "titleName": title,
-                "author": author,
-                "messages": turn,
-                "createdAt": SERVER_TIMESTAMP,
-                "updatedAt": SERVER_TIMESTAMP,
-            }
-        )
+        doc: dict[str, Any] = {
+            "uid": uid,
+            "agent": agent,
+            "messages": turn,
+            "createdAt": SERVER_TIMESTAMP,
+            "updatedAt": SERVER_TIMESTAMP,
+        }
+        if doc_meta:
+            doc.update(doc_meta)
+        ref.set(doc)
 
 
 def create_with_title(
     uid: str,
+    agent: str,
     conversation_id: str,
     generated_title: str,
-    title_id: str,
-    title_name: str,
-    author: str,
+    *,
+    doc_meta: dict[str, Any] | None = None,
 ) -> str:
     """Set the conversation's title. Idempotent: if a title already exists, returns it
     unchanged. If the doc is missing, creates it; if it exists without a title, patches in."""
-    ref = _doc(uid, conversation_id)
+    ref = _doc(uid, agent, conversation_id)
     snap = ref.get()
     if snap.exists:
         data = snap.to_dict() or {}
@@ -71,24 +80,22 @@ def create_with_title(
             return existing
         ref.update({"title": generated_title, "updatedAt": SERVER_TIMESTAMP})
         return generated_title
-    ref.set(
-        {
-            "uid": uid,
-            "agent": "questions",
-            "title": generated_title,
-            "titleId": title_id,
-            "titleName": title_name,
-            "author": author,
-            "messages": [],
-            "createdAt": SERVER_TIMESTAMP,
-            "updatedAt": SERVER_TIMESTAMP,
-        }
-    )
+    doc: dict[str, Any] = {
+        "uid": uid,
+        "agent": agent,
+        "title": generated_title,
+        "messages": [],
+        "createdAt": SERVER_TIMESTAMP,
+        "updatedAt": SERVER_TIMESTAMP,
+    }
+    if doc_meta:
+        doc.update(doc_meta)
+    ref.set(doc)
     return generated_title
 
 
-def bump(uid: str, conversation_id: str) -> None:
-    _doc(uid, conversation_id).update({"updatedAt": SERVER_TIMESTAMP})
+def bump(uid: str, agent: str, conversation_id: str) -> None:
+    _doc(uid, agent, conversation_id).update({"updatedAt": SERVER_TIMESTAMP})
 
 
 def _iso(value: Any) -> str | None:
@@ -99,35 +106,24 @@ def _iso(value: Any) -> str | None:
     return str(value)
 
 
-def list_for_user(uid: str, limit: int = 50) -> list[dict[str, Any]]:
-    q = _collection(uid).order_by("updatedAt", direction=Query.DESCENDING).limit(limit)
+def list_for_user(uid: str, agent: str, limit: int = 50) -> list[dict[str, Any]]:
+    q = _collection(uid, agent).order_by("updatedAt", direction=Query.DESCENDING).limit(limit)
     out: list[dict[str, Any]] = []
     for snap in q.stream():
         d = snap.to_dict() or {}
-        out.append(
-            {
-                "conversationId": snap.id,
-                "title": d.get("title") or "",
-                "titleId": d.get("titleId") or "",
-                "titleName": d.get("titleName") or "",
-                "updatedAt": _iso(d.get("updatedAt")),
-            }
-        )
+        d["conversationId"] = snap.id
+        d["createdAt"] = _iso(d.get("createdAt"))
+        d["updatedAt"] = _iso(d.get("updatedAt"))
+        out.append(d)
     return out
 
 
-def get_for_user(uid: str, conversation_id: str) -> dict[str, Any] | None:
-    snap = _doc(uid, conversation_id).get()
+def get_for_user(uid: str, agent: str, conversation_id: str) -> dict[str, Any] | None:
+    snap = _doc(uid, agent, conversation_id).get()
     if not snap.exists:
         return None
     d = snap.to_dict() or {}
-    return {
-        "conversationId": snap.id,
-        "title": d.get("title") or "",
-        "titleId": d.get("titleId") or "",
-        "titleName": d.get("titleName") or "",
-        "author": d.get("author") or "",
-        "messages": d.get("messages") or [],
-        "createdAt": _iso(d.get("createdAt")),
-        "updatedAt": _iso(d.get("updatedAt")),
-    }
+    d["conversationId"] = snap.id
+    d["createdAt"] = _iso(d.get("createdAt"))
+    d["updatedAt"] = _iso(d.get("updatedAt"))
+    return d

@@ -58,6 +58,7 @@ export default $config({
 		const nosql = await import("./infra/nosql.js");
 		const gpu = await import("./infra/gpu.js");
 		const cpu = await import("./infra/cpu.js");
+		await import("./infra/cloud-tasks.js");
 		const gateway = await import("./infra/api-gateway.js");
 		const cdn = await import("./infra/cdn.js");
 

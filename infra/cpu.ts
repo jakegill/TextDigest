@@ -50,7 +50,7 @@ const apiImage = new dockerbuild.Image("api-image", {
 	load: false,
 });
 
-const apiSa = new gcp.serviceaccount.Account("api-sa", {
+export const apiSa = new gcp.serviceaccount.Account("api-sa", {
 	accountId: `td-${$app.stage}-api-sa`,
 	displayName: `API Cloud Run runtime (${$app.stage})`,
 });
@@ -116,9 +116,11 @@ export const apiService = new gcp.cloudrunv2.Service("api", {
 				},
 				envs: [
 					{ name: "STAGE", value: $app.stage },
+					{ name: "REGION", value: region },
 					{ name: "PROJECT_ID", value: project },
 					{ name: "MINERU_URL", value: mineruServiceUrl },
 					{ name: "DATA_BUCKET", value: dataBucket.name },
+					{ name: "API_SA_EMAIL", value: apiSa.email },
 					{ name: "MINERU_TOOLS_CONFIG_JSON", value: "/tmp/mineru-api.json" },
 				],
 				startupProbe: {
@@ -152,8 +154,10 @@ new sst.x.DevCommand("Api", {
 	},
 	environment: {
 		STAGE: $app.stage,
+		REGION: region,
 		MINERU_URL: mineruServiceUrl,
 		DATA_BUCKET: dataBucket.name,
+		API_SA_EMAIL: apiSa.email,
 		GOOGLE_CLOUD_PROJECT: project,
 		GOOGLE_APPLICATION_CREDENTIALS: process.env.DEV_ADC_PATH ?? "",
 		MINERU_TOOLS_CONFIG_JSON: "/tmp/mineru-api.json",

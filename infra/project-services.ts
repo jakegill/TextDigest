@@ -15,6 +15,7 @@ const APIS = [
 	"firebase.googleapis.com",
 	"identitytoolkit.googleapis.com",
 	"aiplatform.googleapis.com",
+	"cloudtasks.googleapis.com",
 ];
 
 export const enabledServices = APIS.map(

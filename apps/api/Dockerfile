@@ -5,7 +5,7 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    poppler-utils libgl1 libglib2.0-0 \
+    git poppler-utils libgl1 libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
 ENV UV_LINK_MODE=copy \

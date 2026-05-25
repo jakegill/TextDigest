@@ -4,9 +4,12 @@ import { UploadSimpleIcon, BooksIcon, MagnifyingGlassIcon, DotsThreeIcon, FileXI
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 
+import { FindTitlePanel } from "@/components/library/FindTitlePanel";
 import { Button } from "@/components/ui/button";
 import { UploadDropzone, type UploadedTitle } from "@/components/upload-dropzone";
+import { useFindTitle } from "@/hooks/useFindTitle";
 import { deleteTitle } from "@/services/api/deleteTitle";
 import { getTitleById } from "@/services/api/getTitleById";
 import { getTitles } from "@/services/api/getTitles";
@@ -28,6 +31,7 @@ const PROCESSING_POLL_MS = 3000;
 export default function Page() {
 	const [titles, setTitles] = useState<TitleCard[]>([]);
 	const [query, setQuery] = useState("");
+	const findTitle = useFindTitle();
 
 	useEffect(() => {
 		getTitles().then((rows) => {
@@ -118,22 +122,33 @@ export default function Page() {
 
 	return (
 		<div className="h-screen w-screen flex justify-center">
-			<main className="max-w-3xl py-16 w-full space-y-8">
+			<main className="max-w-full px-4 py-8 xl:max-w-3xl min-h-[110svh] xl:py-16 w-full space-y-8">
 				<div className="flex items-center justify-between">
 					<h1 className="text-3xl underline items-center typeface-arizona flex gap-1">
 						<BooksIcon size="28" className="text-neutral-600" />
 						My Library
 					</h1>
-					<UploadDropzone onUploaded={handleUploaded} onProgress={handleProgress}>
+					<div className="flex items-center gap-2">
 						<Button
 							size="lg"
-							variant="default"
-							className="w-fit typeface-diatype rounded-none hover:bg-primary-700 transition-colors duration-300 border cursor-pointer  text-base md:py-4"
+							variant="outline"
+							onClick={() => findTitle.open()}
+							className="w-fit typeface-diatype rounded-none transition-colors duration-300 border cursor-pointer text-base md:py-4"
 						>
-							<UploadSimpleIcon />
-							Upload a Title
+							<MagnifyingGlassIcon />
+							Find a Title
 						</Button>
-					</UploadDropzone>
+						<UploadDropzone onUploaded={handleUploaded} onProgress={handleProgress}>
+							<Button
+								size="lg"
+								variant="default"
+								className="w-fit typeface-diatype rounded-none hover:bg-primary-700 transition-colors duration-300 border cursor-pointer  text-base md:py-4"
+							>
+								<UploadSimpleIcon />
+								Upload a Title
+							</Button>
+						</UploadDropzone>
+					</div>
 				</div>
 
 				<div className="relative">
@@ -150,7 +165,7 @@ export default function Page() {
 				{recent.length > 0 && (
 					<section className="space-y-3">
 						<h2 className="text-xl typeface-arizona text-neutral-600 font-medium">Recent titles</h2>
-						<ul className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-6">
+						<ul className="grid grid-cols-3 gap-4 sm:grid-cols-3 md:grid-cols-4 md:gap-6">
 							{recent.map((t) => (
 								<TitleCardView key={t.titleId} title={t} onDelete={handleDelete} />
 							))}
@@ -165,7 +180,7 @@ export default function Page() {
 							{titles.length === 0 ? "No titles yet — upload one to get started." : "No matches."}
 						</p>
 					) : (
-						<ul className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-6">
+						<ul className="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-4 gap-6">
 							{filtered
 								.sort((a, b) => a.title.localeCompare(b.title))
 								.map((t) => (
@@ -175,16 +190,33 @@ export default function Page() {
 					)}
 				</section>
 			</main>
+			<FindTitlePanel
+				findTitle={findTitle}
+				library={titles.map((t) => ({ title: t.title, author: t.author }))}
+				onUploaded={handleUploaded}
+				onProgress={handleProgress}
+			/>
 		</div>
 	);
 }
 
 function TitleCardView({ title, onDelete }: { title: TitleCard; onDelete: (titleId: string) => void }) {
+	const blockIfProcessing = (e: React.MouseEvent) => {
+		if (!title.isProcessing) return;
+		e.preventDefault();
+		toast.warning("Still processing", {
+			description: "Processing takes ~3-10 minutes, depending on how large the content is.",
+		});
+	};
+	const linkClass = title.isProcessing ? "cursor-not-allowed" : "cursor-pointer";
+
 	return (
-		<li className="flex flex-col  gap-2">
+		<li className="flex flex-col gap-2">
 			<Link
 				href={`/e-reader?titleId=${title.titleId}`}
-				className="cursor-pointer relative aspect-3/4 bg-neutral-100 overflow-hidden block"
+				aria-disabled={title.isProcessing}
+				onClick={blockIfProcessing}
+				className={`${linkClass} relative aspect-3/4 bg-neutral-100 overflow-hidden block`}
 			>
 				<Image
 					src={title.coverUrl}
@@ -200,7 +232,12 @@ function TitleCardView({ title, onDelete }: { title: TitleCard; onDelete: (title
 				)}
 			</Link>
 			<div className="relative group flex flex-col gap-1">
-				<Link href={`/e-reader?titleId=${title.titleId}`} className="flex flex-col gap-1">
+				<Link
+					href={`/e-reader?titleId=${title.titleId}`}
+					aria-disabled={title.isProcessing}
+					onClick={blockIfProcessing}
+					className={`flex flex-col gap-1 ${linkClass}`}
+				>
 					<p className="text-sm typeface-diatype text-neutral-800 line-clamp-2 capitalize">{title.title}</p>
 					<p className="text-xs typeface-diatype text-neutral-500 line-clamp-1 capitalize">{title.author}</p>
 				</Link>

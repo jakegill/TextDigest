@@ -3,6 +3,7 @@
 import { onIdTokenChanged } from "firebase/auth";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
+import { Toaster } from "sonner";
 
 import { auth } from "@/lib/firebase";
 
@@ -19,5 +20,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 		});
 	}, [router]);
 
-	return <>{children}</>;
+	return (
+		<>
+			{children}
+			<Toaster richColors position="bottom-center" />
+		</>
+	);
 }

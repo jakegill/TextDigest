@@ -63,7 +63,7 @@ export function TocPanel({
 		<div
 			ref={panelRef}
 			data-open={isOpen}
-			className="fixed right-0 top-0 z-60 flex h-svh w-full flex-col border-l border-neutral-200 bg-neutral-50 shadow-xl transition-transform translate-x-full data-[open=true]:translate-x-0 md:w-105"
+			className="fixed right-0 top-0 z-60 flex h-svh w-full flex-col border-l border-neutral-200 bg-neutral-50 shadow-xl transition-transform translate-x-full data-[open=true]:translate-x-0 md:w-128"
 		>
 			<div className="flex flex-shrink-0 h-16 items-center justify-between border-b border-neutral-200 px-4 py-3">
 				<span className="font-medium typeface-diatype text-neutral-900">Contents</span>

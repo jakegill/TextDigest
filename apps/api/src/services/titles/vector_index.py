@@ -1,5 +1,6 @@
 import asyncio
 from dataclasses import dataclass
+from typing import Callable
 
 from google import genai
 from google.cloud.firestore_v1.base_vector_query import DistanceMeasure
@@ -51,17 +52,23 @@ def chunk(content_list: list[dict]) -> list[Chunk]:
     return chunks
 
 
-def embed(chunks: list[Chunk]) -> None:
+def embed(
+    chunks: list[Chunk],
+    on_progress: Callable[[float], None] | None = None,
+) -> None:
     cfg = types.EmbedContentConfig(
         task_type="RETRIEVAL_DOCUMENT", output_dimensionality=EMBED_DIM
     )
-    for i in range(0, len(chunks), EMBED_BATCH):
+    total = len(chunks)
+    for i in range(0, total, EMBED_BATCH):
         batch = chunks[i : i + EMBED_BATCH]
         resp = _genai.models.embed_content(
             model=GEMINI_EMBEDDING_001, contents=[c.text for c in batch], config=cfg
         )
         for c, e in zip(batch, resp.embeddings):
             c.embedding = list(e.values)
+        if on_progress and total:
+            on_progress(min(1.0, (i + len(batch)) / total))
 
 
 def persist(uid: str, title_id: str, chunks: list[Chunk]) -> None:
@@ -90,9 +97,14 @@ def persist(uid: str, title_id: str, chunks: list[Chunk]) -> None:
     batch.commit()
 
 
-async def build(uid: str, title_id: str, content_list: list[dict]) -> int:
+async def build(
+    uid: str,
+    title_id: str,
+    content_list: list[dict],
+    on_progress: Callable[[float], None] | None = None,
+) -> int:
     chunks = chunk(content_list)
-    await asyncio.to_thread(embed, chunks)
+    await asyncio.to_thread(embed, chunks, on_progress)
     await asyncio.to_thread(persist, uid, title_id, chunks)
     return len(chunks)
 

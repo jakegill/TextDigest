@@ -447,7 +447,7 @@ function ReaderShell({ titleId, title }: { titleId: string; title: TitleData }) 
 
 				<div
 					ref={parentRef}
-					className="h-full w-full overflow-x-hidden overflow-y-auto px-4 md:px-32 lg:px-48 xl:px-96 2xl:px-[33svw]"
+					className="h-full w-full overflow-x-hidden overflow-y-auto overscroll-contain px-4 md:px-32 lg:px-48 xl:px-96 2xl:px-[33svw]"
 				>
 					<div
 						style={{

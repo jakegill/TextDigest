@@ -1,4 +1,5 @@
 "use client";
+import { Menu } from "@base-ui/react/menu";
 import {
 	ArrowBendRightUpIcon,
 	ArrowClockwiseIcon,
@@ -6,6 +7,7 @@ import {
 	ArrowUpIcon,
 	CheckIcon,
 	CircleNotchIcon,
+	ClockCounterClockwiseIcon,
 	MagnifyingGlassIcon,
 	PlusIcon,
 	SparkleIcon,
@@ -68,6 +70,22 @@ const STARTERS = ["A classic stoicism book", "Recent deep learning textbook", "P
 
 function stripSentinel(text: string): string {
 	return text.replace(/<\/?candidates>[\s\S]*?(<\/candidates>|$)/g, "").trim();
+}
+
+function formatRelative(iso: string | null): string {
+	if (!iso) return "";
+	const t = new Date(iso).getTime();
+	if (Number.isNaN(t)) return "";
+	const diff = Date.now() - t;
+	const s = Math.floor(diff / 1000);
+	if (s < 60) return "just now";
+	const m = Math.floor(s / 60);
+	if (m < 60) return `${m}m ago`;
+	const h = Math.floor(m / 60);
+	if (h < 24) return `${h}h ago`;
+	const d = Math.floor(h / 24);
+	if (d < 7) return `${d}d ago`;
+	return new Date(iso).toLocaleDateString();
 }
 
 function statusLabel(active: SubagentName | null): string {
@@ -290,11 +308,52 @@ export function FindTitlePanel({
 			<div className="flex h-16 items-center justify-between border-b border-neutral-200 px-4 py-3">
 				<div className="flex items-center gap-2">
 					<MagnifyingGlassIcon size={16} className="text-neutral-700" />
-					<span className="font-medium typeface-diatype text-neutral-900">Find a Title</span>
+					<span className="font-medium typeface-diatype text-neutral-900">
+						{findTitle.currentTitle || "Find a Title"}
+					</span>
 				</div>
-				<Button variant="ghost" size="icon-sm" onClick={findTitle.close} aria-label="Close">
-					<XIcon size={16} />
-				</Button>
+				<div className="flex items-center gap-1">
+					<Menu.Root
+						onOpenChange={(open) => {
+							if (open) findTitle.refreshHistory();
+						}}
+					>
+						<Menu.Trigger
+							render={
+								<Button variant="ghost" size="icon-sm" aria-label="Past conversations" />
+							}
+						>
+							<ClockCounterClockwiseIcon size={16} />
+						</Menu.Trigger>
+						<Menu.Portal>
+							<Menu.Positioner side="bottom" align="end" sideOffset={6} className="z-70">
+								<Menu.Popup className="z-70 max-h-80 w-72 overflow-y-auto border border-neutral-200 bg-white py-1 text-sm typeface-diatype text-neutral-700 shadow-md outline-none">
+									{findTitle.history.length === 0 ? (
+										<div className="px-3 py-2 text-xs text-neutral-500">No past conversations</div>
+									) : (
+										findTitle.history.map((c) => (
+											<Menu.Item
+												key={c.conversationId}
+												onClick={() => findTitle.loadConversation(c.conversationId)}
+												className="flex cursor-pointer flex-col gap-0.5 px-3 py-2 outline-none data-highlighted:bg-neutral-100"
+											>
+												<span className="truncate text-sm text-neutral-900">
+													{c.title || "Untitled"}
+												</span>
+												<span className="text-xs text-neutral-500">
+													{formatRelative(c.updatedAt)}
+												</span>
+											</Menu.Item>
+										))
+									)}
+								</Menu.Popup>
+							</Menu.Positioner>
+						</Menu.Portal>
+					</Menu.Root>
+					<Button variant="ghost" size="icon-sm" onClick={findTitle.close} aria-label="Close">
+						<XIcon size={16} />
+					</Button>
+				</div>
 			</div>
 
 			<div ref={bodyRef} className="flex flex-1 flex-col gap-4 py-4 overflow-y-auto px-4 ">

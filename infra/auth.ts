@@ -7,13 +7,15 @@
 
 import { enabledServices } from "./project-services.js";
 
+const isProtectedStage = ["staging", "prod"].includes($app.stage);
+
 const firebaseProject = new gcp.firebase.Project("firebase", {}, { dependsOn: enabledServices });
 
 const webApp = new gcp.firebase.WebApp(
 	"web-app",
 	{
 		displayName: `td-${$app.stage}`,
-		deletionPolicy: "ABANDON",
+		deletionPolicy: isProtectedStage ? "ABANDON" : "DELETE",
 	},
 	{ dependsOn: [firebaseProject] },
 );

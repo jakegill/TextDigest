@@ -68,6 +68,7 @@ export const mineruService = new gcp.cloudrunv2.Service("mineru", {
 	name: `td-${$app.stage}-mineru`,
 	location: region,
 	ingress: "INGRESS_TRAFFIC_ALL",
+	deletionProtection: isProtectedStage,
 	template: {
 		serviceAccount: mineruSa.email,
 		timeout: "3600s",

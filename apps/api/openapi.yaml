@@ -42,14 +42,13 @@ paths:
                 "200":
                     description: Array of title metadata.
         post:
-            summary: Upload a PDF for parsing
+            summary: Upload a PDF; processing happens async (publish-and-forget)
             operationId: uploadTitle
             x-google-backend:
                 address: BACKEND_URL/titles
-                deadline: 600.0
             responses:
-                "200":
-                    description: Parsed and stored.
+                "202":
+                    description: Accepted; returns taskId. Frontend subscribes to SSE progress directly against the Cloud Run URL (bypassing this gateway, which hard-caps backend deadline at 600s and buffers streamed responses).
     /titles/{title_id}:
         parameters:
             - name: title_id

@@ -23,3 +23,20 @@ const webApp = new gcp.firebase.WebApp(
 export const webAppConfig = gcp.firebase.getWebAppConfigOutput({
 	webAppId: webApp.appId,
 });
+
+// Identity Platform is a singleton per GCP project — gate to one stage
+if ($app.stage === "staging") {
+	new gcp.identityplatform.Config(
+		"identity-config",
+		{
+			authorizedDomains: [
+				"localhost",
+				"text-digest-497216.firebaseapp.com",
+				"text-digest-497216.web.app",
+				"staging.textdigest.ai",
+				"app.textdigest.ai",
+			],
+		},
+		{ dependsOn: enabledServices },
+	);
+}

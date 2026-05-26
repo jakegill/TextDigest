@@ -63,6 +63,8 @@ gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
 # - log-streaming: gRPC bits for live log tailing (the Mineru DevCommand uses this)
 gcloud components install beta log-streaming --quiet
 
+(cd apps/api && uv sync)
+
 pnpm exec sst install --print-logs
 
 # Refresh if the stage already has state to avoid divergence between machines — `sst refresh`

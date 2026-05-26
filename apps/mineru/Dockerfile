@@ -5,7 +5,7 @@ ENV PYTHONUNBUFFERED=1
 WORKDIR /app
 
 RUN pip install --no-cache-dir \
-        "mineru[core] @ git+https://github.com/jakegill/MinerU.git@master" \
+        "mineru[pipeline] @ git+https://github.com/jakegill/MinerU.git@master" \
         "huggingface_hub[cli]" \
         "fastapi>=0.115.0" \
         "uvicorn[standard]>=0.32.0" \
@@ -22,10 +22,8 @@ RUN printf '%s\n' '{"models-dir":{"vlm":"/models/MinerU2.5-Pro-2605-1.2B"}}' \
 ENV MINERU_MODEL_SOURCE=local
 
 COPY src ./src
-COPY entrypoint.sh ./
-RUN chmod +x ./entrypoint.sh
 
 EXPOSE 30000
 
 ENTRYPOINT []
-CMD ["./entrypoint.sh"]
+CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "30000"]

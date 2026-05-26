@@ -14,7 +14,6 @@ from mineru.cli.common import do_parse
 # set in infra/gpu.ts
 DATA_BUCKET = os.environ["DATA_BUCKET"]
 PROJECT_ID = os.environ["PROJECT_ID"]
-VLLM_URL = "http://127.0.0.1:30001"
 
 TITLE_AIDED_MODEL = "gemini-3.1-flash-lite"
 VERTEX_LOCATION = "global"
@@ -81,8 +80,7 @@ async def parse(
             pdf_file_names=[title_id],
             pdf_bytes_list=[pdf_bytes],
             p_lang_list=[lang],
-            backend="hybrid-http-client",
-            server_url=VLLM_URL,
+            backend="hybrid-auto-engine",
         )
         root = Path(tmp) / title_id
 

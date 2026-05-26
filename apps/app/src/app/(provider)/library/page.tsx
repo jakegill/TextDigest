@@ -30,23 +30,26 @@ const PROCESSING_POLL_MS = 3000;
 
 export default function Page() {
 	const [titles, setTitles] = useState<TitleCard[]>([]);
+	const [isLoading, setIsLoading] = useState(true);
 	const [query, setQuery] = useState("");
 	const findTitle = useFindTitle();
 
 	useEffect(() => {
-		getTitles().then((rows) => {
-			if (!rows) return;
-			setTitles(
-				rows.map((r: TitleCard) => ({
-					titleId: r.titleId,
-					title: r.title,
-					author: r.author,
-					coverUrl: r.coverUrl,
-					isProcessing: r.isProcessing,
-					lastViewed: r.lastViewed,
-				})),
-			);
-		});
+		getTitles()
+			.then((rows) => {
+				if (!rows) return;
+				setTitles(
+					rows.map((r: TitleCard) => ({
+						titleId: r.titleId,
+						title: r.title,
+						author: r.author,
+						coverUrl: r.coverUrl,
+						isProcessing: r.isProcessing,
+						lastViewed: r.lastViewed,
+					})),
+				);
+			})
+			.finally(() => setIsLoading(false));
 	}, []);
 
 	// Background safety net: while any card shows isProcessing, poll the
@@ -175,7 +178,9 @@ export default function Page() {
 
 				<section className="space-y-3">
 					<h2 className="text-xl typeface-arizona text-neutral-600 font-medium">All titles</h2>
-					{filtered.length === 0 ? (
+					{isLoading ? (
+						<SkeletonGrid />
+					) : filtered.length === 0 ? (
 						<p className="text-sm text-neutral-500 typeface-diatype">
 							{titles.length === 0 ? "No titles yet — upload one to get started." : "No matches."}
 						</p>
@@ -265,5 +270,19 @@ function TitleCardView({ title, onDelete }: { title: TitleCard; onDelete: (title
 				</Menu.Root>
 			</div>
 		</li>
+	);
+}
+
+function SkeletonGrid() {
+	return (
+		<ul className="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-4 gap-6" aria-busy="true" aria-label="Loading titles">
+			{Array.from({ length: 8 }).map((_, i) => (
+				<li key={i} className="flex flex-col gap-2">
+					<div className="relative aspect-3/4 bg-neutral-200 animate-pulse" />
+					<div className="h-3 w-3/4 bg-neutral-200 animate-pulse" />
+					<div className="h-2.5 w-1/2 bg-neutral-200 animate-pulse" />
+				</li>
+			))}
+		</ul>
 	);
 }

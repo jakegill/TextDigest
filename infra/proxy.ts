@@ -9,9 +9,9 @@ const region = "us-central1";
 const project = gcp.config.project!;
 
 const registry = new gcp.artifactregistry.Repository(
-	"web-router-images",
+	"proxy-images",
 	{
-		repositoryId: `td-${$app.stage}-web-router`,
+		repositoryId: `td-${$app.stage}-proxy`,
 		location: region,
 		format: "DOCKER",
 		cleanupPolicies: isProtectedStage
@@ -27,12 +27,12 @@ const registry = new gcp.artifactregistry.Repository(
 	{ dependsOn: enabledServices },
 );
 
-const imageTag = $interpolate`${region}-docker.pkg.dev/${project}/${registry.repositoryId}/web-router:latest`;
-const cacheTag = $interpolate`${region}-docker.pkg.dev/${project}/${registry.repositoryId}/web-router:cache`;
+const imageTag = $interpolate`${region}-docker.pkg.dev/${project}/${registry.repositoryId}/proxy:latest`;
+const cacheTag = $interpolate`${region}-docker.pkg.dev/${project}/${registry.repositoryId}/proxy:cache`;
 
-const webRouterImage = new dockerbuild.Image("web-router-image", {
+const proxyImage = new dockerbuild.Image("proxy-image", {
 	tags: [imageTag],
-	context: { location: path.resolve("apps/web-router") },
+	context: { location: path.resolve("apps/proxy") },
 	platforms: ["linux/amd64"],
 	push: true,
 	cacheFrom: [{ registry: { ref: cacheTag } }],
@@ -40,21 +40,21 @@ const webRouterImage = new dockerbuild.Image("web-router-image", {
 	load: false,
 });
 
-const webRouterSa = new gcp.serviceaccount.Account("web-router-sa", {
-	accountId: `td-${$app.stage}-web-router-sa`,
-	displayName: `Web router Cloud Run runtime (${$app.stage})`,
+const proxySa = new gcp.serviceaccount.Account("proxy-sa", {
+	accountId: `td-${$app.stage}-proxy-sa`,
+	displayName: `Proxy Cloud Run runtime (${$app.stage})`,
 });
 
-export const webRouterService = new gcp.cloudrunv2.Service("web-router", {
-	name: `td-${$app.stage}-web-router`,
+export const proxyService = new gcp.cloudrunv2.Service("proxy", {
+	name: `td-${$app.stage}-proxy`,
 	location: region,
 	ingress: "INGRESS_TRAFFIC_ALL",
 	deletionProtection: isProtectedStage,
 	template: {
-		serviceAccount: webRouterSa.email,
+		serviceAccount: proxySa.email,
 		containers: [
 			{
-				image: webRouterImage.ref,
+				image: proxyImage.ref,
 				ports: { containerPort: 8080 },
 				resources: {
 					limits: { cpu: "1", memory: "256Mi" },
@@ -65,9 +65,9 @@ export const webRouterService = new gcp.cloudrunv2.Service("web-router", {
 	},
 });
 
-new gcp.cloudrunv2.ServiceIamMember("web-router-public", {
-	name: webRouterService.name,
-	location: webRouterService.location,
+new gcp.cloudrunv2.ServiceIamMember("proxy-public", {
+	name: proxyService.name,
+	location: proxyService.location,
 	role: "roles/run.invoker",
 	member: "allUsers",
 });

@@ -9,7 +9,7 @@
 import { apiGatewayUrl } from "./api-gateway.js";
 import { webAppConfig } from "./auth.js";
 import { enabledServices } from "./project-services.js";
-import { webRouterService } from "./web-router.js";
+import { proxyService } from "./proxy.js";
 
 const isProtectedStage = ["staging", "prod"].includes($app.stage);
 
@@ -34,18 +34,18 @@ new gcp.storage.BucketIAMMember("web-public", {
 	member: "allUsers",
 });
 
-const webRouterNeg = new gcp.compute.RegionNetworkEndpointGroup("web-router-neg", {
-	name: `td-${$app.stage}-web-router-neg`,
+const proxyNeg = new gcp.compute.RegionNetworkEndpointGroup("proxy-neg", {
+	name: `td-${$app.stage}-proxy-neg`,
 	region: "us-central1",
 	networkEndpointType: "SERVERLESS",
-	cloudRun: { service: webRouterService.name },
+	cloudRun: { service: proxyService.name },
 });
 
 const backendService = new gcp.compute.BackendService("web-backend", {
 	name: `td-${$app.stage}-web-backend`,
 	protocol: "HTTPS",
 	enableCdn: true,
-	backends: [{ group: webRouterNeg.id }],
+	backends: [{ group: proxyNeg.id }],
 });
 
 const urlMap = new gcp.compute.URLMap("web-urlmap", {

@@ -1,9 +1,0 @@
-{
-	"name": "@td/web-router",
-	"version": "0.0.0",
-	"private": true,
-	"type": "module",
-	"scripts": {
-		"dev": "BUCKET=td-$STAGE-web node src/index.js"
-	}
-}

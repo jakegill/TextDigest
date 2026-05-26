@@ -11,33 +11,19 @@
 //   3. Cloud Run v2 runs the pushed image on port 30000 with one L4 GPU.
 
 import { dataBucket } from "./blob-storage.js";
-import { enabledServices } from "./project-services.js";
 
 const isProtectedStage = ["staging", "prod"].includes($app.stage);
 
 const region = "us-central1";
 const project = gcp.config.project!;
 
-const registry = new gcp.artifactregistry.Repository(
-	"mineru-images",
-	{
-		repositoryId: `td-${$app.stage}-mineru`,
-		location: region,
-		format: "DOCKER",
-		cleanupPolicies: isProtectedStage
-			? undefined
-			: [
-					{
-						id: "keep-latest-3",
-						action: "KEEP",
-						mostRecentVersions: { keepCount: 3 },
-					},
-				],
-	},
-	{ dependsOn: enabledServices },
-);
-
-const mineruImageUri = $interpolate`${region}-docker.pkg.dev/${project}/${registry.repositoryId}/mineru:latest`;
+// AR repo `td-mineru` is shared across stages and managed manually via gcloud,
+// not Pulumi — the image bytes are identical for staging and prod, and the
+// repo is bootstrapped once outside of `sst deploy`. Push with:
+//   docker buildx build --platform linux/amd64 \
+//     --tag us-central1-docker.pkg.dev/<project>/td-mineru/mineru:latest \
+//     --push apps/mineru
+const mineruImageUri = `${region}-docker.pkg.dev/${project}/td-mineru/mineru:latest`;
 
 const mineruSa = new gcp.serviceaccount.Account("mineru-sa", {
 	accountId: `td-${$app.stage}-mineru-sa`,

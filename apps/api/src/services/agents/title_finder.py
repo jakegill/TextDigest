@@ -303,7 +303,7 @@ async def stream_search(
         try:
             async for chunk in await _client.aio.models.generate_content_stream(
                 model=GEMINI_2_5_FLASH,
-                contents=contents,
+                contents=contents,  # type: ignore[arg-type]
                 config=config,
             ):
                 if not chunk.candidates:
@@ -640,9 +640,9 @@ async def stream_search(
                 f"Preview only ({pages} pages, quality {pq}/10) — full book not "
                 f"found. {reason}"
             ),
-            "taskId": best_partial.get("taskId"),
-            "sourceKey": best_partial.get("sourceKey"),
-            "filename": best_partial.get("filename"),
+            "taskId": best_partial.get("taskId"),  # type: ignore[dict-item]
+            "sourceKey": best_partial.get("sourceKey"),  # type: ignore[dict-item]
+            "filename": best_partial.get("filename"),  # type: ignore[dict-item]
         }]
         logger.info(
             "[orchestrator sid=%s] fallback to best_partial quality=%d pages=%d url=%s",

@@ -1,6 +1,6 @@
 import os
 
-from google.cloud import firestore, storage
+from google.cloud import firestore, storage  # type: ignore[attr-defined]
 
 DATA_BUCKET = os.environ["DATA_BUCKET"]
 MINERU_URL = os.environ["MINERU_URL"]

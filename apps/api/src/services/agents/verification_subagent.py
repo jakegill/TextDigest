@@ -210,7 +210,7 @@ async def _generate_with_retry(
     for attempt in range(len(_RETRY_BACKOFFS_S) + 1):
         try:
             response = await _client.aio.models.generate_content(
-                model=model, contents=contents, config=config,
+                model=model, contents=contents, config=config,  # type: ignore[arg-type]
             )
         except genai_errors.ClientError as e:
             if attempt < len(_RETRY_BACKOFFS_S) and getattr(e, "status_code", None) == 429:

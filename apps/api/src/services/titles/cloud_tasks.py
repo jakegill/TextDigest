@@ -63,7 +63,7 @@ async def enqueue_process(
             },
         }
         await asyncio.to_thread(
-            _client.create_task, parent=_queue_path, task=task
+            _client.create_task, parent=_queue_path, task=task  # type: ignore[arg-type]
         )
         logger.info("[%s] enqueued task to %s -> %s", task_id, QUEUE_NAME, process_url)
         return

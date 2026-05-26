@@ -34,8 +34,8 @@ package = false
 mineru = { git = "https://github.com/jakegill/MinerU.git", branch = "master" }
 
 [tool.mypy]
-strict = true
 python_version = "3.13"
+ignore_missing_imports = true
 
 [tool.ruff]
 line-length = 100

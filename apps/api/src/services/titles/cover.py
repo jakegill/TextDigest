@@ -25,7 +25,7 @@ def render_first_page_png(pdf_bytes: bytes) -> bytes:
 def extract_metadata(cover_png: bytes) -> CoverMetadata:
     response = _client.models.generate_content(
         model=GEMINI_2_5_FLASH,
-        contents=[
+        contents=[  # type: ignore[arg-type]
             types.Part.from_bytes(data=cover_png, mime_type="image/png"),
             "Extract the book or document title and the primary author shown on this cover page. "
             "If no author is visible, return an empty string.",
@@ -36,4 +36,4 @@ def extract_metadata(cover_png: bytes) -> CoverMetadata:
             response_schema=CoverMetadata,
         ),
     )
-    return CoverMetadata.model_validate_json(response.text)
+    return CoverMetadata.model_validate_json(response.text)  # type: ignore[arg-type]

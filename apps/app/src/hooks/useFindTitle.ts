@@ -10,12 +10,10 @@ import {
 	type TitleCandidate,
 } from "@/services/api/findTitle";
 import { getFindTitleConversation } from "@/services/api/getFindTitleConversation";
-import {
-	getFindTitleConversations,
-	type FindTitleConversationSummary,
-} from "@/services/api/getFindTitleConversations";
+import { getFindTitleConversations, type FindTitleConversationSummary } from "@/services/api/getFindTitleConversations";
 import { postFindTitleConversation } from "@/services/api/postFindTitleConversation";
 import { putFindTitleConversation } from "@/services/api/putFindTitleConversation";
+import { v4 as uuid } from "uuid";
 
 export type FindTitleContext = { library: LibraryItem[] };
 
@@ -32,7 +30,7 @@ function stripSentinel(text: string): string {
 
 export function useFindTitle() {
 	const [isOpen, setIsOpen] = useState(false);
-	const [conversationId, setConversationId] = useState(() => crypto.randomUUID());
+	const [conversationId, setConversationId] = useState(() => uuid());
 	const [conversation, setConversation] = useState<FindTitleTurn[]>([]);
 	const [streamingText, setStreamingText] = useState("");
 	const [streamingCandidates, setStreamingCandidates] = useState<TitleCandidate[]>([]);
@@ -69,7 +67,7 @@ export function useFindTitle() {
 		setActions([]);
 		setConversation([]);
 		setCurrentTitle("");
-		setConversationId(crypto.randomUUID());
+		setConversationId(uuid());
 	}, []);
 
 	const refreshHistory = useCallback(async () => {

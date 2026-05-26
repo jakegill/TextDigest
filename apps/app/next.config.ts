@@ -4,6 +4,9 @@ const nextConfig: NextConfig = {
   // Static export → out/ uploaded to GCS bucket fronted by Cloud CDN.
   // See infra/cdn.ts.
   output: "export",
+  // Emit out/foo/index.html (not out/foo.html) so GCS's mainPageSuffix
+  // resolves /foo without a server-side rewrite.
+  trailingSlash: true,
   // Required for static export — Next can't run its image optimizer at
   // request time. Signed GCS URLs are passed through as-is.
   images: { unoptimized: true },

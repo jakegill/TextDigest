@@ -57,6 +57,7 @@ export default $config({
 		const cpu = await import("./infra/cpu.js");
 		await import("./infra/queue.js");
 		const gateway = await import("./infra/api-gateway.js");
+		await import("./infra/web-router.js");
 		const cdn = await import("./infra/cdn.js");
 
 		return {

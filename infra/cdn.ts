@@ -9,6 +9,7 @@
 import { apiGatewayUrl } from "./api-gateway.js";
 import { webAppConfig } from "./auth.js";
 import { enabledServices } from "./project-services.js";
+import { webRouterService } from "./web-router.js";
 
 const isProtectedStage = ["staging", "prod"].includes($app.stage);
 
@@ -33,15 +34,23 @@ new gcp.storage.BucketIAMMember("web-public", {
 	member: "allUsers",
 });
 
-const backendBucket = new gcp.compute.BackendBucket("web-backend", {
+const webRouterNeg = new gcp.compute.RegionNetworkEndpointGroup("web-router-neg", {
+	name: `td-${$app.stage}-web-router-neg`,
+	region: "us-central1",
+	networkEndpointType: "SERVERLESS",
+	cloudRun: { service: webRouterService.name },
+});
+
+const backendService = new gcp.compute.BackendService("web-backend", {
 	name: `td-${$app.stage}-web-backend`,
-	bucketName: webBucket.name,
+	protocol: "HTTPS",
 	enableCdn: true,
+	backends: [{ group: webRouterNeg.id }],
 });
 
 const urlMap = new gcp.compute.URLMap("web-urlmap", {
 	name: `td-${$app.stage}-web-urlmap`,
-	defaultService: backendBucket.id,
+	defaultService: backendService.id,
 });
 
 const httpProxy = new gcp.compute.TargetHttpProxy("web-http-proxy", {
@@ -92,7 +101,7 @@ new command.local.Command(
 			NEXT_PUBLIC_FIREBASE_PROJECT_ID: webAppConfig.apply((c) => c.project ?? ""),
 		},
 	},
-	{ dependsOn: [webBucket, backendBucket, urlMap, forwardingRule] },
+	{ dependsOn: [webBucket, backendService, urlMap, forwardingRule] },
 );
 
 // Local dev — runs next dev in a multiplexer pane during `sst dev`. No-op on deploy.

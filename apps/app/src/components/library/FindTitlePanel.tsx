@@ -15,6 +15,7 @@ import {
 	XCircleIcon,
 	XIcon,
 } from "@phosphor-icons/react";
+import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -23,7 +24,7 @@ import { Button } from "@/components/ui/button";
 import { TextShimmer } from "@/components/ui/text-shimmer";
 import type { UploadedTitle } from "@/components/upload-dropzone";
 import type { UseFindTitleReturn } from "@/hooks/useFindTitle";
-import type { LibraryItem, SubagentName, TitleCandidate } from "@/services/api/findTitle";
+import type { AgentAction, LibraryItem, SubagentName, TitleCandidate } from "@/services/api/findTitle";
 import { ingestFoundTitle } from "@/services/api/ingestFoundTitle";
 import { subscribeToTitleProgress, type TitleProgressEvent } from "@/services/api/titleEvents";
 
@@ -95,11 +96,26 @@ function statusLabel(active: SubagentName | null): string {
 	return "Thinking";
 }
 
-function hostname(url: string): string {
+function prettyHost(url: string): string {
 	try {
 		return new URL(url).hostname.replace(/^www\./, "");
 	} catch {
 		return url;
+	}
+}
+
+function actionLabel(a: AgentAction): string {
+	switch (a.kind) {
+		case "browse":
+			return `Browsed ${prettyHost(a.url)}`;
+		case "browser_search":
+			return `Searched "${a.query}"`;
+		case "verify":
+			return `Verifying ${prettyHost(a.url)}`;
+		case "search":
+			return `Searching the web for "${a.query}"`;
+		case "research":
+			return `Researching ${a.topic}`;
 	}
 }
 
@@ -136,7 +152,7 @@ function AddToLibraryButton({ state, disabled, onClick }: { state: IngestState; 
 			type="button"
 			disabled={v.disabled || disabled}
 			onClick={onClick}
-			className={`flex items-center gap-1 rounded-md px-2 py-1 text-xs typeface-diatype transition-colors duration-300 ${v.className} ${v.disabled || disabled ? "" : "cursor-pointer"}`}
+			className={`flex items-center gap-1 rounded-md px-2 py-1 text-sm typeface-diatype transition-colors duration-300 ${v.className} ${v.disabled || disabled ? "" : "cursor-pointer"}`}
 		>
 			{v.icon}
 			{v.label}
@@ -155,20 +171,27 @@ function CandidateCard({
 }) {
 	const canAdd = Boolean(c.taskId && c.sourceKey);
 	return (
-		<div className="flex flex-col gap-1 rounded-md border border-neutral-200 bg-white px-3 py-2">
-			<span className="truncate text-sm typeface-diatype text-neutral-900">{c.title}</span>
-			{c.author && <span className="truncate text-xs typeface-diatype text-neutral-500">{c.author}</span>}
-			<div className="mt-1 flex items-center justify-between gap-2">
+		<div className="w-full py-4 flex items-center  flex-col gap-4">
+			<div className="flex flex-col gap-4 w-64">
+				<div className="relative aspect-3/4 overflow-hidden border border-neutral-200 bg-neutral-100">
+					<Image src={c.coverUrl} alt={c.title} fill sizes="288px" className="object-cover" />
+				</div>
+				<div className="flex flex-col gap-1">
+					<p className="text-sm typeface-diatype text-neutral-800 line-clamp-2 capitalize">{c.title}</p>
+					<p className="text-xs typeface-diatype text-neutral-500 line-clamp-1 capitalize">{c.author}</p>
+				</div>
+			</div>
+			<div className="flex items-center w-64 gap-4">
+				{canAdd && <AddToLibraryButton state={ingestState} onClick={() => onAdd(c)} />}
 				<a
 					href={c.sourceUrl}
 					target="_blank"
 					rel="noopener noreferrer"
-					className="flex items-center gap-1 text-xs typeface-diatype text-primary-700 transition-colors duration-300 hover:text-primary-900"
+					className="flex items-center gap-1 rounded-md border border-neutral-200 bg-neutral-100 px-2 py-1 text-sm typeface-diatype text-neutral-700 transition-colors duration-300 hover:bg-neutral-100 hover:text-neutral-900 active:scale-95"
 				>
-					<ArrowSquareOutIcon size={12} />
-					{hostname(c.sourceUrl)}
+					<ArrowSquareOutIcon size={14} />
+					Preview
 				</a>
-				{canAdd && <AddToLibraryButton state={ingestState} onClick={() => onAdd(c)} />}
 			</div>
 		</div>
 	);
@@ -177,16 +200,28 @@ function CandidateCard({
 function AssistantTurn({
 	content,
 	candidates,
+	actions,
 	ingestStates,
 	onAdd,
 }: {
 	content: string;
 	candidates?: TitleCandidate[];
+	actions?: AgentAction[];
 	ingestStates: Record<string, IngestState>;
 	onAdd: (c: TitleCandidate) => void;
 }) {
 	return (
 		<div className="flex flex-col gap-2">
+			{actions && actions.length > 0 && (
+				<div className="flex flex-col gap-0.5">
+					{actions.map((a, i) => (
+						<div key={i} className="flex items-center gap-1.5 text-xs typeface-diatype text-neutral-500">
+							<SparkleIcon size={12} className="shrink-0" />
+							<span className="truncate">{actionLabel(a)}</span>
+						</div>
+					))}
+				</div>
+			)}
 			{content && <AssistantMarkdown text={content} />}
 			{candidates && candidates.length > 0 && (
 				<div className="flex flex-col gap-2">
@@ -296,7 +331,6 @@ export function FindTitlePanel({
 	};
 
 	const liveNarration = stripSentinel(findTitle.streamingText);
-	const showStarters = findTitle.conversation.length === 0 && !findTitle.isStreaming;
 
 	return (
 		<div
@@ -317,11 +351,7 @@ export function FindTitlePanel({
 							if (open) findTitle.refreshHistory();
 						}}
 					>
-						<Menu.Trigger
-							render={
-								<Button variant="ghost" size="icon-sm" aria-label="Past conversations" />
-							}
-						>
+						<Menu.Trigger render={<Button variant="ghost" size="icon-sm" aria-label="Past conversations" />}>
 							<ClockCounterClockwiseIcon size={16} />
 						</Menu.Trigger>
 						<Menu.Portal>
@@ -339,9 +369,7 @@ export function FindTitlePanel({
 												<span className="truncate text-sm text-neutral-900">
 													{c.title || "Untitled"}
 												</span>
-												<span className="text-xs text-neutral-500">
-													{formatRelative(c.updatedAt)}
-												</span>
+												<span className="text-xs text-neutral-500">{formatRelative(c.updatedAt)}</span>
 											</Menu.Item>
 										))
 									)}
@@ -369,42 +397,34 @@ export function FindTitlePanel({
 							key={i}
 							content={t.content}
 							candidates={t.candidates}
+							actions={t.actions}
 							ingestStates={ingestStates}
 							onAdd={handleAdd}
 						/>
 					),
 				)}
 
-				{findTitle.isStreaming && (liveNarration || findTitle.streamingCandidates.length > 0) && (
-					<AssistantTurn
-						content={liveNarration}
-						candidates={findTitle.streamingCandidates}
-						ingestStates={ingestStates}
-						onAdd={handleAdd}
-					/>
-				)}
+				{findTitle.isStreaming &&
+					(liveNarration || findTitle.streamingCandidates.length > 0 || findTitle.actions.length > 0) && (
+						<AssistantTurn
+							content={liveNarration}
+							candidates={findTitle.streamingCandidates}
+							actions={findTitle.actions}
+							ingestStates={ingestStates}
+							onAdd={handleAdd}
+						/>
+					)}
 
 				{findTitle.isStreaming && findTitle.streamingCandidates.length === 0 && (
 					<div className="flex items-center gap-2 text-neutral-700">
 						<SparkleIcon size={16} className="shrink-0" />
-						<p className="min-w-0 text-sm typeface-diatype">
-							<TextShimmer>{statusLabel(findTitle.activeSubagent)}</TextShimmer>
+						<p className="min-w-0 text-sm line-clamp-1 typeface-diatype">
+							<TextShimmer>
+								{findTitle.actions.length > 0
+									? actionLabel(findTitle.actions[findTitle.actions.length - 1])
+									: statusLabel(findTitle.activeSubagent)}
+							</TextShimmer>
 						</p>
-					</div>
-				)}
-
-				{showStarters && (
-					<div className="mt-auto flex w-full flex-col gap-2">
-						{STARTERS.map((m) => (
-							<button
-								key={m}
-								onClick={() => handleSearch(m)}
-								className="flex cursor-pointer items-center justify-between gap-1 rounded-md bg-neutral-100 px-4 py-2 transition-colors duration-300 hover:bg-neutral-200"
-							>
-								<p className="truncate text-sm typeface-diatype text-neutral-700">{m}</p>
-								<ArrowBendRightUpIcon size={20} className="text-neutral-500" />
-							</button>
-						))}
 					</div>
 				)}
 			</div>

@@ -3,6 +3,7 @@ import { useCallback, useRef, useState } from "react";
 
 import {
 	findTitle,
+	type AgentAction,
 	type FindTurn,
 	type LibraryItem,
 	type SubagentName,
@@ -22,6 +23,7 @@ export type FindTitleTurn = {
 	role: "user" | "assistant";
 	content: string;
 	candidates?: TitleCandidate[];
+	actions?: AgentAction[];
 };
 
 function stripSentinel(text: string): string {
@@ -34,6 +36,7 @@ export function useFindTitle() {
 	const [conversation, setConversation] = useState<FindTitleTurn[]>([]);
 	const [streamingText, setStreamingText] = useState("");
 	const [streamingCandidates, setStreamingCandidates] = useState<TitleCandidate[]>([]);
+	const [actions, setActions] = useState<AgentAction[]>([]);
 	const [isStreaming, setIsStreaming] = useState(false);
 	const [activeSubagent, setActiveSubagent] = useState<SubagentName | null>(null);
 	const [currentTitle, setCurrentTitle] = useState("");
@@ -54,10 +57,6 @@ export function useFindTitle() {
 
 	const close = useCallback(() => {
 		setIsOpen(false);
-		abortRef.current?.abort();
-		abortRef.current = null;
-		setIsStreaming(false);
-		setActiveSubagent(null);
 	}, []);
 
 	const reset = useCallback(() => {
@@ -67,6 +66,7 @@ export function useFindTitle() {
 		setActiveSubagent(null);
 		setStreamingText("");
 		setStreamingCandidates([]);
+		setActions([]);
 		setConversation([]);
 		setCurrentTitle("");
 		setConversationId(crypto.randomUUID());
@@ -86,11 +86,13 @@ export function useFindTitle() {
 		setActiveSubagent(null);
 		setStreamingText("");
 		setStreamingCandidates([]);
+		setActions([]);
 		setConversation(
 			doc.messages.map((m) => ({
 				role: m.role,
 				content: m.content,
 				candidates: m.candidates,
+				actions: m.actions,
 			})),
 		);
 		setConversationId(doc.conversationId);
@@ -110,6 +112,7 @@ export function useFindTitle() {
 			setConversation((c) => [...c, { role: "user", content: trimmed }]);
 			setStreamingText("");
 			setStreamingCandidates([]);
+			setActions([]);
 			setActiveSubagent(null);
 			setIsStreaming(true);
 
@@ -125,6 +128,11 @@ export function useFindTitle() {
 
 			let textAcc = "";
 			let candAcc: TitleCandidate[] = [];
+			const actionsAcc: AgentAction[] = [];
+			const pushAction = (a: AgentAction) => {
+				actionsAcc.push(a);
+				setActions([...actionsAcc]);
+			};
 			try {
 				await findTitle(
 					conversationId,
@@ -140,6 +148,21 @@ export function useFindTitle() {
 							setStreamingText(textAcc);
 						} else if (e.event === "subagent_call") {
 							setActiveSubagent(e.body.agent);
+							const inp = e.body.input;
+							if (e.body.agent === "research" && typeof inp.topic === "string") {
+								pushAction({ kind: "research", topic: inp.topic });
+							} else if (e.body.agent === "search" && typeof inp.query === "string") {
+								pushAction({ kind: "search", query: inp.query });
+							} else if (e.body.agent === "verify" && typeof inp.url === "string") {
+								pushAction({ kind: "verify", url: inp.url });
+							}
+						} else if (e.event === "browser_action") {
+							const args = e.body.args;
+							if (e.body.action === "navigate" && typeof args.url === "string") {
+								pushAction({ kind: "browse", url: args.url });
+							} else if (e.body.action === "search" && typeof args.query === "string") {
+								pushAction({ kind: "browser_search", query: args.query });
+							}
 						} else if (e.event === "candidates") {
 							candAcc = e.body;
 							setStreamingCandidates(candAcc);
@@ -151,10 +174,12 @@ export function useFindTitle() {
 									role: "assistant",
 									content: stripSentinel(textAcc),
 									candidates: candAcc,
+									actions: actionsAcc.length ? [...actionsAcc] : undefined,
 								},
 							]);
 							setStreamingText("");
 							setStreamingCandidates([]);
+							setActions([]);
 							setActiveSubagent(null);
 							setIsStreaming(false);
 							putFindTitleConversation(conversationId);
@@ -181,6 +206,7 @@ export function useFindTitle() {
 		conversation,
 		streamingText,
 		streamingCandidates,
+		actions,
 		isStreaming,
 		activeSubagent,
 		currentTitle,

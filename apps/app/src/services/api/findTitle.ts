@@ -7,6 +7,7 @@ export type TitleCandidate = {
 	author: string;
 	sourceUrl: string;
 	snippet: string;
+	coverUrl: string;
 	taskId?: string;
 	sourceKey?: string;
 	filename?: string;
@@ -18,10 +19,19 @@ export type FindTurn = { role: "user" | "assistant"; content: string };
 
 export type SubagentName = "research" | "search" | "verify";
 
+export type AgentAction =
+	| { kind: "research"; topic: string }
+	| { kind: "search"; query: string }
+	| { kind: "verify"; url: string }
+	| { kind: "browse"; url: string }
+	| { kind: "browser_search"; query: string };
+
 export type FindTitleEvent =
 	| { event: "start" }
 	| { event: "thinking"; body: string }
 	| { event: "subagent_call"; body: { agent: SubagentName; input: Record<string, unknown> } }
+	| { event: "browser_action"; body: { action: string; args: Record<string, unknown> } }
+	| { event: "search_result"; body: { query: string; count: number; urls: { title: string; url: string }[] } }
 	| { event: "research_chunk"; body: string }
 	| { event: "candidates"; body: TitleCandidate[] }
 	| { event: "done" }

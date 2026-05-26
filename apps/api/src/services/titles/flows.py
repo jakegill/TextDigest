@@ -61,20 +61,24 @@ async def stage_upload(
 
 
 async def stage_agent_capture(
-    uid: str, pdf_bytes: bytes, filename: str | None
-) -> tuple[str, str]:
-    """Stages PDF bytes captured by the verify subagent to a separate prefix.
-    No progress.init — so unclicked candidates don't show as pending in the
-    library UI. Returns (task_id, source_key)."""
+    uid: str, pdf_bytes: bytes, cover_png: bytes, filename: str | None
+) -> tuple[str, str, str]:
+    """Stages PDF bytes + rendered cover captured by the verify subagent to a
+    separate prefix. No progress.init — so unclicked candidates don't show as
+    pending in the library UI. Returns (task_id, source_key, cover_key)."""
     task_id = str(uuid.uuid4())
     source_key = f"users/{uid}/agent-staged/{task_id}/source.pdf"
+    cover_key = f"users/{uid}/agent-staged/{task_id}/cover.png"
     logger.info(
-        "[%s] uid=%s agent capture stage: %s (%.1f KB)",
-        task_id, uid, filename, len(pdf_bytes) / 1024,
+        "[%s] uid=%s agent capture stage: %s (%.1f KB pdf, %.1f KB cover)",
+        task_id, uid, filename, len(pdf_bytes) / 1024, len(cover_png) / 1024,
     )
-    with timed(task_id, "upload agent-staged source.pdf → gcs"):
-        await asyncio.to_thread(_upload, source_key, pdf_bytes, "application/pdf")
-    return task_id, source_key
+    with timed(task_id, "upload agent-staged source.pdf + cover.png → gcs"):
+        await asyncio.gather(
+            asyncio.to_thread(_upload, source_key, pdf_bytes, "application/pdf"),
+            asyncio.to_thread(_upload, cover_key, cover_png, "image/png"),
+        )
+    return task_id, source_key, cover_key
 
 
 async def stage_process(
@@ -181,10 +185,6 @@ async def stage_process(
                 json.dumps(content_list).encode("utf-8"),
                 "application/json",
             )
-        # Image extraction happens inside the mineru service now and writes
-        # straight to gs://${DATA_BUCKET}/${images_prefix}/ before /parse
-        # returns. Filenames are already referenced from content_list, so
-        # downstream reads work without any handoff here.
 
         await asyncio.to_thread(
             progress.update,

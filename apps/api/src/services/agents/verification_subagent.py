@@ -23,7 +23,7 @@ from google.genai import types
 from urllib.parse import unquote, urlparse
 
 from ...dependencies import PROJECT_ID
-from ..titles import flows
+from ..titles import cover, flows, service
 from .constants import GEMINI_2_5_COMPUTER_USE_PREVIEW, GEMINI_3_5_FLASH
 from .playwright_computer import EnvState, PlaywrightComputer
 
@@ -431,6 +431,7 @@ async def verify(
 
     final_text = ""
     captured_inspection: tuple[str, int, bytes, bytes | None] | None = None
+    unsaveable_download: str | None = None
     computer: PlaywrightComputer | None = None
     try:
         computer = PlaywrightComputer(screen_size=(_SCREEN_W, _SCREEN_H))
@@ -571,6 +572,7 @@ async def verify(
                             len(first_png), len(last_png or b''),
                         )
                     else:
+                        unsaveable_download = captured
                         response_payload["note"] = (
                             f"A download was captured from {captured} but it could not "
                             "be rendered as a PDF (corrupt, encrypted, or not actually a "
@@ -597,6 +599,13 @@ async def verify(
                 )
                 break
 
+            if unsaveable_download is not None:
+                logger.info(
+                    "[verify_subagent vid=%s] STOP reason=download_unsaveable step=%d url=%s",
+                    vid, step, unsaveable_download,
+                )
+                break
+
             contents.append(
                 types.Content(
                     role="user",
@@ -616,8 +625,18 @@ async def verify(
         task_id_out: str | None = None
         source_key_out: str | None = None
         filename_out: str | None = None
+        cover_url_out: str | None = None
+        title_out: str = ""
+        author_out: str = ""
 
-        if captured_inspection is not None:
+        if unsaveable_download is not None:
+            ok = False
+            resolved = None
+            reason = (
+                f"download intercepted from {unsaveable_download} but the file "
+                "could not be saved or rendered as a PDF"
+            )
+        elif captured_inspection is not None:
             captured_url, page_count, first_png, last_png = captured_inspection
             page_count_out = page_count
             ok, reason, partial_quality = await _judge_capture(
@@ -631,23 +650,53 @@ async def verify(
                 partial_quality = 10
             if partial_quality >= 1 and computer is not None:
                 pdf_bytes = computer.get_download_bytes(captured_url) or b""
+                staged_ok = False
                 if pdf_bytes:
                     filename_out = _filename_from_url(captured_url)
                     try:
-                        task_id_out, source_key_out = await flows.stage_agent_capture(
-                            uid, pdf_bytes, filename_out,
+                        cover_png = await asyncio.to_thread(
+                            cover.render_first_page_png, pdf_bytes,
                         )
+                        task_id_out, source_key_out, cover_key_out = (
+                            await flows.stage_agent_capture(
+                                uid, pdf_bytes, cover_png, filename_out,
+                            )
+                        )
+                        cover_url_out = service._signed_url(cover_key_out)
+                        meta = await asyncio.to_thread(
+                            cover.extract_metadata, cover_png,
+                        )
+                        title_out = meta.title
+                        author_out = meta.author
+                        staged_ok = True
                         logger.info(
-                            "[verify_subagent vid=%s] staged taskId=%s sourceKey=%s bytes=%d",
+                            "[verify_subagent vid=%s] staged taskId=%s sourceKey=%s "
+                            "bytes=%d title=%r author=%r",
                             vid, task_id_out, source_key_out, len(pdf_bytes),
+                            title_out, author_out,
                         )
                     except Exception:
                         logger.exception(
-                            "[verify_subagent vid=%s] stage_agent_capture failed", vid
+                            "[verify_subagent vid=%s] cover/stage/metadata pipeline failed", vid
                         )
-                        task_id_out = None
-                        source_key_out = None
-                        filename_out = None
+                # Card requires title + author + cover. If staging or metadata
+                # extraction failed (or there were no PDF bytes at all), demote
+                # the verify to a non-result so the orchestrator picks another.
+                if not staged_ok:
+                    ok = False
+                    resolved = None
+                    partial_quality = 0
+                    partial_url = None
+                    task_id_out = None
+                    source_key_out = None
+                    filename_out = None
+                    cover_url_out = None
+                    title_out = ""
+                    author_out = ""
+                    reason = (
+                        f"{reason} (cover/metadata extraction failed)"
+                        if reason else "cover/metadata extraction failed"
+                    )
         else:
             parsed_raw = _parse_verify_result(final_text)
             parsed = parsed_raw or {}
@@ -670,6 +719,20 @@ async def verify(
             if ok:
                 partial_quality = 10
 
+        # Final invariant: a card needs title + author + cover + a staged PDF
+        # the user can add. If any are missing, the verify is not a usable
+        # result — the orchestrator will pick another candidate.
+        if ok and not (task_id_out and source_key_out and cover_url_out):
+            logger.info(
+                "[verify_subagent vid=%s] demoting ok=true → ok=false: missing staging metadata "
+                "(taskId=%s sourceKey=%s coverUrl=%s)",
+                vid, task_id_out, source_key_out, bool(cover_url_out),
+            )
+            ok = False
+            resolved = None
+            partial_quality = 0
+            partial_url = None
+
         result = {
             "url": url,
             "ok": ok,
@@ -681,6 +744,9 @@ async def verify(
             "taskId": task_id_out,
             "sourceKey": source_key_out,
             "filename": filename_out,
+            "coverUrl": cover_url_out,
+            "title": title_out,
+            "author": author_out,
         }
         logger.info(
             "[verify_subagent vid=%s] DONE ok=%s resolved=%s partial=%d pages=%d taskId=%s reason=%r downloads=%d",

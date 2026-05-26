@@ -1,4 +1,4 @@
-import type { TitleCandidate } from "@/services/api/findTitle";
+import type { AgentAction, TitleCandidate } from "@/services/api/findTitle";
 import { auth } from "@/lib/firebase";
 
 export type FindTitleMessage = {
@@ -6,6 +6,7 @@ export type FindTitleMessage = {
 	content: string;
 	ts?: string;
 	candidates?: TitleCandidate[];
+	actions?: AgentAction[];
 };
 
 export type FindTitleConversationDoc = {

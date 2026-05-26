@@ -2,7 +2,7 @@ import asyncio
 import json
 import logging
 import re
-from typing import Annotated, AsyncIterator
+from typing import Annotated, Any, AsyncIterator
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
@@ -181,17 +181,42 @@ async def post_title_finder(
     async def stream() -> AsyncIterator[bytes]:
         text_acc: list[str] = []
         candidates_acc: list[dict] = []
+        actions_acc: list[dict] = []
         try:
             yield b'data: {"event":"start"}\n\n'
             async for ev in title_finder.stream_search(body.query, uid, existing, history):
-                if ev.get("event") in ("thinking", "research_chunk"):
+                event = ev.get("event")
+                if event in ("thinking", "research_chunk"):
                     text_acc.append(str(ev.get("body") or ""))
-                elif ev.get("event") == "candidates":
+                elif event == "candidates":
                     body_val = ev.get("body")
                     if isinstance(body_val, list):
                         candidates_acc = body_val
+                elif event == "subagent_call":
+                    sub = ev.get("body") or {}
+                    agent = sub.get("agent")
+                    inp = sub.get("input") or {}
+                    if agent == "research" and inp.get("topic"):
+                        actions_acc.append({"kind": "research", "topic": inp["topic"]})
+                    elif agent == "search" and inp.get("query"):
+                        actions_acc.append({"kind": "search", "query": inp["query"]})
+                    elif agent == "verify" and inp.get("url"):
+                        actions_acc.append({"kind": "verify", "url": inp["url"]})
+                elif event == "browser_action":
+                    ba = ev.get("body") or {}
+                    action = ba.get("action")
+                    args = ba.get("args") or {}
+                    if action == "navigate" and args.get("url"):
+                        actions_acc.append({"kind": "browse", "url": args["url"]})
+                    elif action == "search" and args.get("query"):
+                        actions_acc.append({"kind": "browser_search", "query": args["query"]})
                 payload = json.dumps(ev, separators=(",", ":"))
                 yield f"data: {payload}\n\n".encode("utf-8")
+            meta: dict[str, Any] = {}
+            if candidates_acc:
+                meta["candidates"] = candidates_acc
+            if actions_acc:
+                meta["actions"] = actions_acc
             await asyncio.to_thread(
                 service.append_turn,
                 uid,
@@ -199,7 +224,7 @@ async def post_title_finder(
                 body.conversationId,
                 body.query,
                 _strip_sentinel("".join(text_acc)),
-                assistant_meta=({"candidates": candidates_acc} if candidates_acc else None),
+                assistant_meta=(meta or None),
             )
             yield b'data: {"event":"done"}\n\n'
         except Exception as e:

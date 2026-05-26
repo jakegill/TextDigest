@@ -47,11 +47,10 @@ async def _unwrap_url(client: httpx.AsyncClient, url: str) -> str:
 
 async def search(query: str, count: int = 10) -> list[dict[str, str]]:
     """Returns [{title, url, snippet}, ...]. Uses gemini-2.5-flash + google_search."""
-    prompt = (
-        f"Run a Google search for: {query}\n\n"
-        f"Return the top {count} results as found by the search engine. "
-        "Do not pre-filter, do not judge accessibility — just return what Google returned."
-    )
+    prompt = f"""\
+Run a Google search for: {query}
+
+Return the top {count} results as found by the search engine. Do not pre-filter, do not judge accessibility — just return what Google returned."""
     response = await _client.aio.models.generate_content(
         model=GEMINI_3_5_FLASH,
         contents=prompt,

@@ -72,25 +72,34 @@ def _system_prompt(
         if has_images
         else ""
     )
-    return (
-        "# Persona\n"
-        "You are a useful study assistant. The user is reading an e-book and "
-        "wants you to clarify or expand on the highlighted portion of text, "
-        "or to answer a general question about the current page.\n\n"
-        "# Workflow\n"
-        "- Use the highlighted text and user query as the foundation for your response.\n"
-        "- Use the surrounding e-book page content for further context.\n"
-        "- Use the book title and author for broader context.\n"
-        f"{image_workflow}"
-        "\n# Context\n"
-        f"<book title>\n{title}\n</book title>\n\n"
-        f"<book author>\n{author}\n</book author>\n\n"
-        f"<current ebook page content>\n{page_content}\n</current ebook page content>\n\n"
-        f"<highlighted text>\n{highlighted_text}\n</highlighted text>\n\n"
-        f"{image_hint}"
-        "# Expected Response\n"
-        "A concise answer to the user's question."
-    )
+    return f"""\
+# Persona
+You are a useful study assistant. The user is reading an e-book and wants you to clarify or expand on the highlighted portion of text, or to answer a general question about the current page.
+
+# Workflow
+- Use the highlighted text and user query as the foundation for your response.
+- Use the surrounding e-book page content for further context.
+- Use the book title and author for broader context.
+{image_workflow}
+# Context
+<book title>
+{title}
+</book title>
+
+<book author>
+{author}
+</book author>
+
+<current ebook page content>
+{page_content}
+</current ebook page content>
+
+<highlighted text>
+{highlighted_text}
+</highlighted text>
+
+{image_hint}# Expected Response
+A concise answer to the user's question."""
 
 
 async def stream_answer(
@@ -144,11 +153,10 @@ async def stream_answer(
 async def generate_title(first_message: str) -> str:
     resp = await _client.aio.models.generate_content(
         model=GEMINI_3_FLASH_PREVIEW,
-        contents=(
-            "Generate a 3-5 word title summarizing this user question. "
-            "Output the title only — no quotes, no trailing punctuation.\n\n"
-            f"Question: {first_message}"
-        ),
+        contents=f"""\
+Generate a 3-5 word title summarizing this user question. Output the title only — no quotes, no trailing punctuation.
+
+Question: {first_message}""",
     )
     cleaned = (resp.text or "").strip().strip('"').strip()[:80]
     return cleaned or "Untitled"

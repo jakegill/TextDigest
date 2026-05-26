@@ -398,49 +398,31 @@ def extract_toc(
         f"skeleton_hint_lines={skeleton_hint.count(chr(10)) + 1}"
     )
 
-    prompt = (
-        "You are building a Table of Contents for an e-reader. Output is JSON: "
-        "a list of entries with `title`, `level` (1=top, 4=deepest), and "
-        "`pdfPage` (the ACTUAL 1-based PDF page number where the section "
-        "starts in this PDF).\n\n"
-        "STEP 1 — find the printed TOC.\n"
-        "Read the text of the first PDF pages below. Look for a printed Table "
-        "of Contents (header like 'Contents', 'Table of Contents', "
-        "'Sommaire', 'Index'). If found, identify every entry: its title, its "
-        "printed page number (the number next to the title), and its indent "
-        "level. Note: printed page numbers refer to the book's own numbering, "
-        "NOT the PDF page numbers.\n\n"
-        "STEP 2 — find the front-matter offset.\n"
-        "Pick the FIRST clearly-distinctive chapter entry from the printed TOC. "
-        "Its printed page might be 11, but in the PDF it could be on page 13 "
-        "(due to cover, foreword, lists of figures, etc.). Use the "
-        "`get_page_contents` tool to look at PDF pages around `printed_page` "
-        "(try printed_page, printed_page+1, printed_page+2, ...) until you "
-        "find the page where that chapter heading actually appears at the top "
-        "of the page. The offset = pdf_page − printed_page. Typical offsets "
-        "are 0 to +10.\n\n"
-        "STEP 3 — verify each entry.\n"
-        "Apply the offset to every printed-TOC entry to get a candidate "
-        "pdf_page. Use `get_page_headings(pdf_page)` (cheap) to confirm the "
-        "chapter heading is on the expected page. If not, try ±1 or ±2 pages. "
-        "Some books shift offset mid-way; re-verify a spot-check entry every "
-        "few chapters.\n\n"
-        "STEP 4 — submit.\n"
-        "Call `submit_toc` ONCE with a JSON array of {title, level, pdfPage} "
-        "entries in document order. Preserve the printed-TOC title text "
-        "verbatim. Drop entries whose pdfPage you cannot confidently locate.\n\n"
-        "If there is NO printed TOC in the first pages, fall back: synthesize "
-        "from the heading skeleton hint below. Pick meaningful level-1 and "
-        "level-2 entries. Use `get_page_headings` to verify each pick (the "
-        "skeleton's pdfPages can be wrong on TOC pages, so always verify). "
-        "Skip noise like 'Page 1', captions, or stray emphasis.\n\n"
-        f"Total PDF pages in this document: {total_pages}\n\n"
-        f"=== First {FIRST_PAGES_TO_SHOW} PDF pages ===\n"
-        f"{first_pages_text}\n\n"
-        "=== Heading skeleton hint (level-1 and level-2 only; pages may be "
-        "wrong on TOC pages — always verify with tools) ===\n"
-        f"{skeleton_hint}\n"
-    )
+    prompt = f"""\
+You are building a Table of Contents for an e-reader. Output is JSON: a list of entries with `title`, `level` (1=top, 4=deepest), and `pdfPage` (the ACTUAL 1-based PDF page number where the section starts in this PDF).
+
+STEP 1 — find the printed TOC.
+Read the text of the first PDF pages below. Look for a printed Table of Contents (header like 'Contents', 'Table of Contents', 'Sommaire', 'Index'). If found, identify every entry: its title, its printed page number (the number next to the title), and its indent level. Note: printed page numbers refer to the book's own numbering, NOT the PDF page numbers.
+
+STEP 2 — find the front-matter offset.
+Pick the FIRST clearly-distinctive chapter entry from the printed TOC. Its printed page might be 11, but in the PDF it could be on page 13 (due to cover, foreword, lists of figures, etc.). Use the `get_page_contents` tool to look at PDF pages around `printed_page` (try printed_page, printed_page+1, printed_page+2, ...) until you find the page where that chapter heading actually appears at the top of the page. The offset = pdf_page − printed_page. Typical offsets are 0 to +10.
+
+STEP 3 — verify each entry.
+Apply the offset to every printed-TOC entry to get a candidate pdf_page. Use `get_page_headings(pdf_page)` (cheap) to confirm the chapter heading is on the expected page. If not, try ±1 or ±2 pages. Some books shift offset mid-way; re-verify a spot-check entry every few chapters.
+
+STEP 4 — submit.
+Call `submit_toc` ONCE with a JSON array of {{title, level, pdfPage}} entries in document order. Preserve the printed-TOC title text verbatim. Drop entries whose pdfPage you cannot confidently locate.
+
+If there is NO printed TOC in the first pages, fall back: synthesize from the heading skeleton hint below. Pick meaningful level-1 and level-2 entries. Use `get_page_headings` to verify each pick (the skeleton's pdfPages can be wrong on TOC pages, so always verify). Skip noise like 'Page 1', captions, or stray emphasis.
+
+Total PDF pages in this document: {total_pages}
+
+=== First {FIRST_PAGES_TO_SHOW} PDF pages ===
+{first_pages_text}
+
+=== Heading skeleton hint (level-1 and level-2 only; pages may be wrong on TOC pages — always verify with tools) ===
+{skeleton_hint}
+"""
 
     entries = _run_toc_agent(prompt, skeleton, by_page, total_pages)
     if entries:

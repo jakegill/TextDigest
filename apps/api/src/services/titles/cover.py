@@ -27,9 +27,8 @@ def extract_metadata(cover_png: bytes) -> CoverMetadata:
         model=GEMINI_3_1_FLASH_LITE,
         contents=[  # type: ignore[arg-type]
             types.Part.from_bytes(data=cover_png, mime_type="image/png"),
-            "Extract the book or document title and the primary author shown on this cover page. "
-            "If no author is visible, return an empty string.",
-            "The output should be in title case; Examples: 'Text Like This', 'The Lord of the Rings'"
+            "Extract the book or document title and the primary author shown on this cover page. If no author is visible, return an empty string.",
+            "The output should be in title case; Examples: 'Text Like This', 'The Lord of the Rings'",
         ],
         config=types.GenerateContentConfig(
             response_mime_type="application/json",

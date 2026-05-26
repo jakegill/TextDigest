@@ -99,42 +99,28 @@ class _JudgeVerdict(pydantic.BaseModel):
     partial_quality: int
 
 
-_JUDGE_PROMPT = (
-    "You judge whether a captured PDF is the FULL version of the expected book "
-    "AND assign a partial-quality score for use as a fallback.\n\n"
-    "Expected book: {expected_title}\n"
-    "PDF page count: {page_count}\n\n"
-    "Image 1 is the rendered FIRST page of the PDF.\n"
-    "{last_page_line}\n\n"
-    "Rules for `ok`:\n"
-    "- IGNORE the URL and filename entirely. Judge ONLY from the page images "
-    "and page count.\n"
-    "- First page must look like a real book artifact (cover, title page, "
-    "copyright, TOC, or chapter 1 opener). If it's a CAPTCHA, login wall, "
-    "error page, ad, or unrelated content → ok=false.\n"
-    "- Last page must look like an obvious ENDING (back cover, index, "
-    "references, bibliography, appendix, About the Author, or close of a "
-    "final chapter). If it stops mid-paragraph, shows 'End of preview / Buy "
-    "now / Continue reading on…', or is a stub → ok=false (it's a snippet).\n"
-    "- Page count is context only. No hard threshold — some books are short. "
-    "Combine with what you see on the pages.\n\n"
-    "Rules for `partial_quality` (integer 0-10):\n"
-    "- 0 = NOT the expected book at all (CAPTCHA, login wall, error page, "
-    "ad, single-page landing, completely unrelated content, wrong book).\n"
-    "- 10 = full version of the expected book (must match ok=true).\n"
-    "- 1-9 = a real PDF of the expected book but partial. Score higher when "
-    "more of the book is present: a single 'free chapter' = 1-2; a few "
-    "chapters / MEAP early version with most chapters = 5-7; near-complete "
-    "manuscript missing only an appendix = 8-9.\n"
-    "- ok=true implies partial_quality=10. ok=false with partial_quality=0 "
-    "means it's not the book at all. ok=false with partial_quality>=1 means "
-    "it's a real but incomplete copy of the right book.\n\n"
-    "The reason field MUST be consistent with ok — if you set ok=true the "
-    "reason must affirm (e.g. 'real cover, last page is index, 200 pages'); "
-    "if you set ok=false the reason must describe the disqualifying signal "
-    "(e.g. 'first page is a CAPTCHA wall', 'last page stops mid-chapter', "
-    "'3-page landing PDF, not a book')."
-)
+_JUDGE_PROMPT = """
+You judge whether a captured PDF is the FULL version of the expected book AND assign a partial-quality score for use as a fallback.
+
+Expected book: {expected_title}
+PDF page count: {page_count}
+
+Image 1 is the rendered FIRST page of the PDF.
+{last_page_line}
+
+Rules for `ok`:
+- IGNORE the URL and filename entirely. Judge ONLY from the page images and page count.
+- First page must look like a real book artifact (cover, title page, copyright, TOC, or chapter 1 opener). If it's a CAPTCHA, login wall, error page, ad, or unrelated content → ok=false.
+- Last page must look like an obvious ENDING (back cover, index, references, bibliography, appendix, About the Author, or close of a final chapter). If it stops mid-paragraph, shows 'End of preview / Buy now / Continue reading on…', or is a stub → ok=false (it's a snippet).
+- Page count is context only. No hard threshold — some books are short. Combine with what you see on the pages.
+
+Rules for `partial_quality` (integer 0-10):
+- 0 = NOT the expected book at all (CAPTCHA, login wall, error page, ad, single-page landing, completely unrelated content, wrong book).
+- 10 = full version of the expected book (must match ok=true).
+- 1-9 = a real PDF of the expected book but partial. Score higher when more of the book is present: a single 'free chapter' = 1-2; a few chapters / MEAP early version with most chapters = 5-7; near-complete manuscript missing only an appendix = 8-9.
+- ok=true implies partial_quality=10. ok=false with partial_quality=0 means it's not the book at all. ok=false with partial_quality>=1 means it's a real but incomplete copy of the right book.
+
+The reason field MUST be consistent with ok — if you set ok=true the reason must affirm (e.g. 'real cover, last page is index, 200 pages'); if you set ok=false the reason must describe the disqualifying signal (e.g. 'first page is a CAPTCHA wall', 'last page stops mid-chapter', '3-page landing PDF, not a book')."""
 
 
 async def _judge_capture(
@@ -236,35 +222,29 @@ async def _generate_with_retry(
 
 
 def _system_prompt(url: str, expected_title: str) -> str:
-    return (
-        "# Persona\n"
-        "You drive a browser to trigger a PDF download. Your only job is "
-        "navigation — the server judges whether the captured PDF is the real "
-        "book from rendered first/last pages. You do NOT need to judge.\n\n"
-        f"# Target URL\n{url}\n\n"
-        f"# Expected book title\n{expected_title}\n\n"
-        "# Workflow\n"
-        f"1. Navigate to {url}.\n"
-        "2. If the response includes `download_captured`, your job is DONE. "
-        "Stop immediately — do not click again, do not retry, do not emit "
-        "any text. The server takes over from here.\n"
-        "3. If no download fires and you land on a landing page: look for a "
-        "'Download PDF' / 'PDF' / 'Full text' button or an embedded viewer. "
-        "Click it ONCE.\n"
-        "4. If the visible page shows a paywall, login wall, 404, or CAPTCHA "
-        "and no download was captured, emit:\n"
-        "   <verify_result>{\"ok\": false, \"resolvedUrl\": null, \"reason\": \"<short>\"}</verify_result>\n"
-        "5. If you genuinely cannot trigger a download after a few tries, "
-        "emit the same ok=false block.\n\n"
-        "# Downloads are INVISIBLE in the browser screenshot\n"
-        "Direct .pdf URLs commonly fire a browser 'download' event and leave "
-        "the page blank or showing an error — that is NORMAL. The file was "
-        "captured off-screen. The response payload carries `download_captured` "
-        "as proof. Trust it. Do NOT retry or conclude failure from a blank "
-        "screenshot when `download_captured` is present — just stop.\n\n"
-        "# Be concise\n"
-        "No filler narration. The user sees the browser actions live."
-    )
+    return f"""
+        # Persona
+        You drive a browser to trigger a PDF download. Your only job is navigation — the server judges whether the captured PDF is the real book from rendered first/last pages. You do NOT need to judge.
+
+        # Target URL
+        {url}
+
+        # Expected book title
+        {expected_title}
+
+        # Workflow
+        1. Navigate to {url}.
+        2. If the response includes `download_captured`, your job is DONE. Stop immediately — do not click again, do not retry, do not emit any text. The server takes over from here.
+        3. If no download fires and you land on a landing page: look for a 'Download PDF' / 'PDF' / 'Full text' button or an embedded viewer. Click it ONCE.
+        4. If the visible page shows a paywall, login wall, 404, or CAPTCHA and no download was captured, emit:
+        <verify_result>{{"ok": false, "resolvedUrl": null, "reason": "<short>"}}</verify_result>
+        5. If you genuinely cannot trigger a download after a few tries, emit the same ok=false block.
+
+        # Downloads are INVISIBLE in the browser screenshot
+        Direct .pdf URLs commonly fire a browser 'download' event and leave the page blank or showing an error — that is NORMAL. The file was captured off-screen. The response payload carries `download_captured` as proof. Trust it. Do NOT retry or conclude failure from a blank screenshot when `download_captured` is present — just stop.
+
+        # Be concise
+        No filler narration. The user sees the browser actions live."""
 
 
 def _denormalize_x(x: int) -> int:
@@ -529,6 +509,7 @@ async def verify(
                     )
                     function_responses.append(
                         types.FunctionResponse(
+                            id=fc.id,
                             name=fc.name or "unknown",
                             response={"error": str(e)},
                         )
@@ -537,6 +518,7 @@ async def verify(
                 if env_state is None:
                     function_responses.append(
                         types.FunctionResponse(
+                            id=fc.id,
                             name=fc.name or "unknown",
                             response={"error": "unsupported action"},
                         )
@@ -597,6 +579,7 @@ async def verify(
                         )
                 function_responses.append(
                     types.FunctionResponse(
+                        id=fc.id,
                         name=fc.name or "unknown",
                         response=response_payload,
                         parts=response_parts,

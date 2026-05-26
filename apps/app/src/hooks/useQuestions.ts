@@ -6,6 +6,7 @@ import { getConversations, type ConversationSummary } from "@/services/api/getCo
 import { postConversation } from "@/services/api/postConversation";
 import { postQuestion, type QuestionTurn } from "@/services/api/postQuestion";
 import { putConversation } from "@/services/api/putConversation";
+import { v4 as uuid } from "uuid";
 
 export type QuestionsContext = {
 	titleId: string;
@@ -16,7 +17,7 @@ export type QuestionsContext = {
 
 export function useQuestions() {
 	const [isOpen, setIsOpen] = useState(false);
-	const [conversationId, setConversationId] = useState(() => crypto.randomUUID());
+	const [conversationId, setConversationId] = useState(() => uuid());
 	const [conversation, setConversation] = useState<QuestionTurn[]>([]);
 	const [highlightedText, setHighlightedText] = useState("");
 	const [streamingText, setStreamingText] = useState("");
@@ -51,7 +52,7 @@ export function useQuestions() {
 		setStreamingText("");
 		setConversation([]);
 		setCurrentTitle("");
-		setConversationId(crypto.randomUUID());
+		setConversationId(uuid());
 	}, []);
 
 	const refreshHistory = useCallback(async () => {

@@ -16,8 +16,11 @@ RUN pip install --no-cache-dir \
 RUN huggingface-cli download opendatalab/MinerU2.5-Pro-2605-1.2B \
       --local-dir /models/MinerU2.5-Pro-2605-1.2B
 
-RUN printf '%s\n' '{"models-dir":{"vlm":"/models/MinerU2.5-Pro-2605-1.2B"}}' \
-    > /root/mineru.json
+RUN mineru-models-download -s huggingface -m pipeline
+
+RUN python3 -c "import json; p='/root/mineru.json'; d=json.load(open(p)); d['models-dir']['vlm']='/models/MinerU2.5-Pro-2605-1.2B'; json.dump(d, open(p,'w'))"
+
+RUN echo "=== /root/mineru.json at end of build ===" && cat /root/mineru.json && echo "=== end ==="
 
 ENV MINERU_MODEL_SOURCE=local
 

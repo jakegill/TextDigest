@@ -1,4 +1,4 @@
-/// <reference path="./.sst/platform/config.d.ts" />
+/// <reference path="../.sst/platform/config.d.ts" />
 
 // Cloud Run v2 service for apps/api (FastAPI).
 //

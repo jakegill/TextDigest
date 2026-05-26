@@ -1,4 +1,4 @@
-/// <reference path="./.sst/platform/config.d.ts" />
+/// <reference path="../.sst/platform/config.d.ts" />
 
 // GCP API Gateway in front of the Cloud Run api service.
 //

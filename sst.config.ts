@@ -1,4 +1,4 @@
-/// <reference path="./infra/.sst/platform/config.d.ts" />
+/// <reference path="./.sst/platform/config.d.ts" />
 
 // SST top-level configuration for text-digest.
 
@@ -9,7 +9,6 @@
 //   - infra/cpu.ts           — Cloud Run + Artifact Registry (api)
 //   - infra/api-gateway.ts   — GCP API Gatewa
 //   - infra/cdn.ts           — GCS web bucket + Cloud CDN
-//   - infra/llm.ts           — Vertex AI bindings
 //   - infra/gpu.ts           — Cloud Run on L4, inference
 
 export default $config({
@@ -58,7 +57,7 @@ export default $config({
 		const nosql = await import("./infra/nosql.js");
 		const gpu = await import("./infra/gpu.js");
 		const cpu = await import("./infra/cpu.js");
-		await import("./infra/cloud-tasks.js");
+		await import("./infra/queue.js");
 		const gateway = await import("./infra/api-gateway.js");
 		const cdn = await import("./infra/cdn.js");
 

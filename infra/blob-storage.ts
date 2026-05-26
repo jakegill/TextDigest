@@ -1,4 +1,4 @@
-/// <reference path="./.sst/platform/config.d.ts" />
+/// <reference path="../.sst/platform/config.d.ts" />
 
 // GCS data-lake bucket. Bucket names are globally unique on GCS, so the
 // name is suffixed with `$app.stage`.

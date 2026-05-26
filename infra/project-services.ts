@@ -1,4 +1,4 @@
-/// <reference path="./.sst/platform/config.d.ts" />
+/// <reference path="../.sst/platform/config.d.ts" />
 
 // Enable every GCP API the rest of infra/ depends on.
 

@@ -1,4 +1,4 @@
-/// <reference path="./.sst/platform/config.d.ts" />
+/// <reference path="../.sst/platform/config.d.ts" />
 
 // Firebase Auth — Google sign-in is enabled via the Firebase console toggle
 

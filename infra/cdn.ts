@@ -1,4 +1,4 @@
-/// <reference path="./.sst/platform/config.d.ts" />
+/// <reference path="../.sst/platform/config.d.ts" />
 
 // Static frontend for apps/app — GCS bucket fronted by a global HTTPS load
 // balancer with Cloud CDN.
@@ -69,6 +69,6 @@ new sst.x.DevCommand("WebApp", {
 		NEXT_PUBLIC_API_URL: "http://localhost:8080",
 		NEXT_PUBLIC_FIREBASE_API_KEY: webAppConfig.apiKey,
 		NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: webAppConfig.authDomain,
-		NEXT_PUBLIC_FIREBASE_PROJECT_ID: webAppConfig.projectId,
+		NEXT_PUBLIC_FIREBASE_PROJECT_ID: webAppConfig.project,
 	},
 });

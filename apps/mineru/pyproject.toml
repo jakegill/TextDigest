@@ -1,0 +1,12 @@
+[project]
+name = "td-mineru"
+version = "0.0.0"
+description = "MinerU parse service (FastAPI wrapper + vllm OpenAI backend)"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "python-multipart>=0.0.20",
+    "google-auth>=2.35.0",
+    "google-cloud-storage>=2.18.0",
+]

@@ -2,18 +2,30 @@ FROM vllm/vllm-openai:v0.11.2
 
 ENV PYTHONUNBUFFERED=1
 
-RUN pip install --no-cache-dir "mineru[core] @ git+https://github.com/jakegill/MinerU.git@master" "huggingface_hub[cli]"
+WORKDIR /app
+
+RUN pip install --no-cache-dir \
+        "mineru[core] @ git+https://github.com/jakegill/MinerU.git@master" \
+        "huggingface_hub[cli]" \
+        "fastapi>=0.115.0" \
+        "uvicorn[standard]>=0.32.0" \
+        "python-multipart>=0.0.20" \
+        "google-auth>=2.35.0" \
+        "google-cloud-storage>=2.18.0"
 
 RUN huggingface-cli download opendatalab/MinerU2.5-Pro-2605-1.2B \
       --local-dir /models/MinerU2.5-Pro-2605-1.2B
 
-# mineru reads ~/mineru.json — `MINERU_MODEL_PATH` is NOT a recognized var.
 RUN printf '%s\n' '{"models-dir":{"vlm":"/models/MinerU2.5-Pro-2605-1.2B"}}' \
     > /root/mineru.json
 
 ENV MINERU_MODEL_SOURCE=local
 
+COPY src ./src
+COPY entrypoint.sh ./
+RUN chmod +x ./entrypoint.sh
+
 EXPOSE 30000
 
 ENTRYPOINT []
-CMD ["mineru-openai-server", "--host", "0.0.0.0", "--port", "30000", "--gpu-memory-utilization", "0.9"]
+CMD ["./entrypoint.sh"]

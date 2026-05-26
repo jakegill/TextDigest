@@ -30,9 +30,19 @@ const mineruSa = new gcp.serviceaccount.Account("mineru-sa", {
 	displayName: `MinerU Cloud Run runtime (${$app.stage})`,
 });
 
-new gcp.storage.BucketIAMMember("mineru-bucket-reader", {
+// Mineru now owns the parse pipeline, including writing extracted images
+// directly to GCS — needs object create/delete, not just read.
+new gcp.storage.BucketIAMMember("mineru-bucket-writer", {
 	bucket: dataBucket.name,
-	role: "roles/storage.objectViewer",
+	role: "roles/storage.objectAdmin",
+	member: $interpolate`serviceAccount:${mineruSa.email}`,
+});
+
+// Mineru's title-aided post-processing calls Vertex Gemini directly; mirrors
+// the `api-vertex-user` grant in infra/cpu.ts.
+new gcp.projects.IAMMember("mineru-vertex-user", {
+	project,
+	role: "roles/aiplatform.user",
 	member: $interpolate`serviceAccount:${mineruSa.email}`,
 });
 

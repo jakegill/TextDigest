@@ -1,7 +1,6 @@
 import asyncio
 import json
 import logging
-import mimetypes
 import time
 import uuid
 from contextlib import contextmanager
@@ -160,7 +159,9 @@ async def stage_process(
         )
 
         with timed(task_id, "mineru parse"):
-            parse_result = await mineru.parse_pdf(title_id, pdf_bytes)
+            parse_result = await mineru.parse_pdf(
+                title_id, pdf_bytes, images_prefix
+            )
         parsed = parse_result.markdown
         content_list = parse_result.content_list
         logger.info(
@@ -180,20 +181,10 @@ async def stage_process(
                 json.dumps(content_list).encode("utf-8"),
                 "application/json",
             )
-
-        if parse_result.images:
-            with timed(task_id, f"upload {len(parse_result.images)} images"):
-                await asyncio.gather(
-                    *[
-                        asyncio.to_thread(
-                            _upload,
-                            f"{images_prefix}/{name}",
-                            data,
-                            mimetypes.guess_type(name)[0] or "application/octet-stream",
-                        )
-                        for name, data in parse_result.images.items()
-                    ]
-                )
+        # Image extraction happens inside the mineru service now and writes
+        # straight to gs://${DATA_BUCKET}/${images_prefix}/ before /parse
+        # returns. Filenames are already referenced from content_list, so
+        # downstream reads work without any handoff here.
 
         await asyncio.to_thread(
             progress.update,

@@ -75,5 +75,20 @@ jobs:
             pnpm exec sst refresh --stage prod --print-logs
           fi
 
+      - name: Free disk space on runner
+        # Headroom for the api docker build inside `sst deploy`. Recovers ~40-50 GB.
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: true
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: false
+          swap-storage: true
+
+      - name: Show disk after cleanup
+        run: df -h /
+
       - name: SST deploy
         run: pnpm exec sst deploy --stage prod --print-logs

@@ -66,11 +66,19 @@ jobs:
             - name: Free disk space on runner
               # ubuntu-latest has ~14 GB free after pre-installed software; a ~10-12 GB
               # mineru image plus build context plus cache pull will OOM the disk
-              # without this. Recovers ~30 GB.
-              run: |
-                  sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
-                  docker system prune -af
-                  df -h /
+              # without this. Recovers ~40-50 GB.
+              uses: jlumbroso/free-disk-space@main
+              with:
+                  tool-cache: true
+                  android: true
+                  dotnet: true
+                  haskell: true
+                  large-packages: true
+                  docker-images: false # keep buildx cache layers we just set up
+                  swap-storage: true
+
+            - name: Show disk after cleanup
+              run: df -h /
 
             - name: Set up Docker Buildx
               uses: docker/setup-buildx-action@v3

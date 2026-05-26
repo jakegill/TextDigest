@@ -8,9 +8,6 @@ name: deploy prod
 #      branch protection is bypassed).
 #   2. The job-level `if` requires the PR to have been merged AND its source
 #      branch to be `staging`.
-#
-# This workflow has its OWN WIF provider, service account, and AWS role,
-# distinct from staging. Staging's creds can't deploy prod, and vice versa.
 
 on:
   pull_request:
@@ -52,8 +49,8 @@ jobs:
       - name: Authenticate to Google Cloud (WIF)
         uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER_PROD }}
-          service_account: ${{ secrets.GCP_DEPLOY_SA_PROD }}
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_DEPLOY_SA }}
 
       - uses: google-github-actions/setup-gcloud@v2
 
@@ -63,7 +60,7 @@ jobs:
       - name: Authenticate to AWS (OIDC — for SST state bucket)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_PROD_ARN }}
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: us-east-1
 
       - name: Materialize SST platform types

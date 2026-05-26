@@ -24,7 +24,7 @@ from urllib.parse import unquote, urlparse
 
 from ...dependencies import PROJECT_ID
 from ..titles import flows
-from .constants import GEMINI_2_5_COMPUTER_USE_PREVIEW, GEMINI_2_5_FLASH
+from .constants import GEMINI_2_5_COMPUTER_USE_PREVIEW, GEMINI_3_5_FLASH
 from .playwright_computer import EnvState, PlaywrightComputer
 
 logger = logging.getLogger("uvicorn.error")
@@ -161,7 +161,7 @@ async def _judge_capture(
         parts.append(types.Part.from_bytes(data=last_png, mime_type="image/png"))
     try:
         response = await _flash_client.aio.models.generate_content(
-            model=GEMINI_2_5_FLASH,
+            model=GEMINI_3_5_FLASH,
             contents=parts,
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",

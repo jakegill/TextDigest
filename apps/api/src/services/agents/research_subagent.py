@@ -7,7 +7,7 @@ from google import genai
 from google.genai import types
 
 from ...dependencies import PROJECT_ID
-from .constants import GEMINI_2_5_FLASH
+from .constants import GEMINI_3_5_FLASH
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -42,7 +42,7 @@ async def research_stream(topic: str) -> AsyncIterator[str]:
     """Yields text deltas as the model generates the markdown recommendations."""
     total = 0
     async for chunk in await _client.aio.models.generate_content_stream(
-        model=GEMINI_2_5_FLASH,
+        model=GEMINI_3_5_FLASH,
         contents=_RESEARCH_PROMPT.format(topic=topic),
         config=types.GenerateContentConfig(
             tools=[types.Tool(google_search=types.GoogleSearch())],

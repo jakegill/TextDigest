@@ -14,7 +14,7 @@ from google.oauth2 import id_token
 from mineru.cli.common import do_parse
 
 from ...dependencies import MINERU_URL
-from .constants import GEMINI_2_5_FLASH
+from .constants import GEMINI_3_5_FLASH, GEMINI_3_1_FLASH_LITE
 
 
 @dataclass(slots=True)
@@ -40,7 +40,7 @@ def write_mineru_config() -> None:
             f"/v1beta1/projects/{project}/locations/{VERTEX_LOCATION}"
             "/endpoints/openapi/"
         ),
-        "model": f"google/{GEMINI_2_5_FLASH}",
+        "model": f"google/{GEMINI_3_1_FLASH_LITE}",
         "enable": True,
     }
     cfg_path = os.environ.get("MINERU_TOOLS_CONFIG_JSON") or str(

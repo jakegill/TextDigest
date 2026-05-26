@@ -13,7 +13,7 @@ from google import genai
 from google.genai import types
 
 from ...dependencies import PROJECT_ID
-from .constants import GEMINI_2_5_FLASH
+from .constants import GEMINI_3_5_FLASH
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -53,7 +53,7 @@ async def search(query: str, count: int = 10) -> list[dict[str, str]]:
         "Do not pre-filter, do not judge accessibility — just return what Google returned."
     )
     response = await _client.aio.models.generate_content(
-        model=GEMINI_2_5_FLASH,
+        model=GEMINI_3_5_FLASH,
         contents=prompt,
         config=types.GenerateContentConfig(
             tools=[types.Tool(google_search=types.GoogleSearch())],

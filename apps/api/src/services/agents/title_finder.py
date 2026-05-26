@@ -1,11 +1,11 @@
 """Orchestrator agent for the Find-a-Title feature.
 
 Four-agent architecture:
-  - Orchestrator (this file): gemini-2.5-flash + three function_declarations.
+  - Orchestrator (this file): gemini-3.5-flash + three function_declarations.
     Routes each turn between research mode and find mode.
-  - Research subagent (research_subagent.py): gemini-2.5-flash + google_search.
+  - Research subagent (research_subagent.py): gemini-3.5-flash + google_search.
     Returns curated markdown of expert-recommended titles on a topic.
-  - Search subagent (search_subagent.py): gemini-2.5-flash + google_search
+  - Search subagent (search_subagent.py): gemini-3.5-flash + google_search
     built-in tool. One call per invocation, returns URLs.
   - Verification subagent (verification_subagent.py): gemini-2.5-computer-use-
     preview + PlaywrightComputer. Full browser-driven verification of a single URL.
@@ -26,7 +26,7 @@ from google.genai import types
 
 from ...dependencies import PROJECT_ID
 from . import research_subagent, search_subagent, verification_subagent
-from .constants import GEMINI_2_5_FLASH
+from .constants import GEMINI_3_5_FLASH
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -302,7 +302,7 @@ async def stream_search(
         function_calls: list[types.FunctionCall] = []
         try:
             async for chunk in await _client.aio.models.generate_content_stream(
-                model=GEMINI_2_5_FLASH,
+                model=GEMINI_3_5_FLASH,
                 contents=contents,  # type: ignore[arg-type]
                 config=config,
             ):

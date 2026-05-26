@@ -12,7 +12,7 @@ from rapidfuzz import fuzz, process
 
 from ...dependencies import PROJECT_ID
 from ...models.titles import SkeletonEntry, TocEntry
-from .constants import GEMINI_2_5_FLASH
+from .constants import GEMINI_3_5_FLASH
 
 VERTEX_LOCATION = "us-central1"
 FIRST_PAGES_TO_SHOW = 10
@@ -315,7 +315,7 @@ def _run_toc_agent(
     )
     try:
         _client.models.generate_content(
-            model=GEMINI_2_5_FLASH,
+            model=GEMINI_3_5_FLASH,
             contents=prompt,
             config=types.GenerateContentConfig(
                 tools=tools,

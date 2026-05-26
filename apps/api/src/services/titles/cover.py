@@ -6,7 +6,7 @@ from google.genai import types
 
 from ...dependencies import PROJECT_ID
 from ...models.titles import CoverMetadata
-from .constants import GEMINI_2_5_FLASH
+from .constants import GEMINI_3_5_FLASH, GEMINI_3_1_FLASH_LITE
 
 VERTEX_LOCATION = "us-central1"
 
@@ -24,7 +24,7 @@ def render_first_page_png(pdf_bytes: bytes) -> bytes:
 
 def extract_metadata(cover_png: bytes) -> CoverMetadata:
     response = _client.models.generate_content(
-        model=GEMINI_2_5_FLASH,
+        model=GEMINI_3_1_FLASH_LITE,
         contents=[  # type: ignore[arg-type]
             types.Part.from_bytes(data=cover_png, mime_type="image/png"),
             "Extract the book or document title and the primary author shown on this cover page. "

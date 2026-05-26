@@ -7,7 +7,7 @@ from google.genai import types
 from loguru import logger
 
 from ...dependencies import PROJECT_ID
-from .constants import GEMINI_3_FLASH_PREVIEW
+from .constants import GEMINI_3_5_FLASH, GEMINI_3_1_FLASH_LITE
 
 VERTEX_LOCATION = "global"
 MAX_IMAGES_PER_TURN = 6
@@ -115,7 +115,7 @@ async def stream_answer(
     page_text = _strip_md_images(page_content)
     system = _system_prompt(title, author, page_text, highlighted_text, has_images=bool(image_urls))
 
-    contents: list[types.Content] = []
+    contents: list[types.ContentUnion] = []
     for turn in history:
         role = "model" if turn.get("role") == "assistant" else "user"
         contents.append(
@@ -141,8 +141,8 @@ async def stream_answer(
     )
 
     stream = await _client.aio.models.generate_content_stream(
-        model=GEMINI_3_FLASH_PREVIEW,
-        contents=contents,  # type: ignore[arg-type]
+        model=GEMINI_3_5_FLASH,
+        contents=contents,
         config=types.GenerateContentConfig(system_instruction=system),
     )
     async for chunk in stream:
@@ -152,11 +152,12 @@ async def stream_answer(
 
 async def generate_title(first_message: str) -> str:
     resp = await _client.aio.models.generate_content(
-        model=GEMINI_3_FLASH_PREVIEW,
+        model=GEMINI_3_1_FLASH_LITE,
         contents=f"""\
-Generate a 3-5 word title summarizing this user question. Output the title only — no quotes, no trailing punctuation.
+        Generate a 3-5 word title summarizing this user question. 
+        Output the title only — no quotes, no trailing punctuation.
 
-Question: {first_message}""",
+        Question: {first_message}""",
     )
     cleaned = (resp.text or "").strip().strip('"').strip()[:80]
     return cleaned or "Untitled"

@@ -50,20 +50,20 @@ async def enqueue_process(
     ).encode("utf-8")
 
     if _USE_QUEUE and _client and _queue_path:
-        task = {
-            "http_request": {
-                "http_method": tasks_v2.HttpMethod.POST,
-                "url": process_url,
-                "headers": {"Content-Type": "application/json"},
-                "body": body,
-                "oidc_token": {
-                    "service_account_email": API_SA_EMAIL,
-                    "audience": process_url,
-                },
-            },
-        }
+        task = tasks_v2.Task(
+            http_request=tasks_v2.HttpRequest(
+                http_method=tasks_v2.HttpMethod.POST,
+                url=process_url,
+                headers={"Content-Type": "application/json"},
+                body=body,
+                oidc_token=tasks_v2.OidcToken(
+                    service_account_email=API_SA_EMAIL,
+                    audience=process_url,
+                ),
+            ),
+        )
         await asyncio.to_thread(
-            _client.create_task, parent=_queue_path, task=task  # type: ignore[arg-type]
+            _client.create_task, parent=_queue_path, task=task
         )
         logger.info("[%s] enqueued task to %s -> %s", task_id, QUEUE_NAME, process_url)
         return

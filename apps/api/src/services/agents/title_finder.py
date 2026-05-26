@@ -226,7 +226,7 @@ async def stream_search(
 
     system_instruction = SYSTEM_PROMPT_BASE + _library_block(existing or [])
 
-    contents: list[types.Content] = []
+    contents: list[types.ContentUnion] = []
     for turn in history or []:
         role = "model" if turn.get("role") == "assistant" else "user"
         contents.append(
@@ -263,7 +263,7 @@ async def stream_search(
         try:
             async for chunk in await _client.aio.models.generate_content_stream(
                 model=GEMINI_3_5_FLASH,
-                contents=contents,  # type: ignore[arg-type]
+                contents=contents,
                 config=config,
             ):
                 if not chunk.candidates:

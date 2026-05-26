@@ -62,11 +62,16 @@ def embed(
     total = len(chunks)
     for i in range(0, total, EMBED_BATCH):
         batch = chunks[i : i + EMBED_BATCH]
+        texts: list[types.ContentUnion] = [c.text for c in batch]
         resp = _genai.models.embed_content(
-            model=GEMINI_EMBEDDING_001, contents=[c.text for c in batch], config=cfg  # type: ignore[arg-type]
+            model=GEMINI_EMBEDDING_001, contents=texts, config=cfg
         )
-        for c, e in zip(batch, resp.embeddings):  # type: ignore[arg-type]
-            c.embedding = list(e.values)  # type: ignore[arg-type]
+        embeddings = resp.embeddings or []
+        for c, e in zip(batch, embeddings):
+            values = e.values
+            if values is None:
+                raise RuntimeError("embedding response missing values")
+            c.embedding = list(values)
         if on_progress and total:
             on_progress(min(1.0, (i + len(batch)) / total))
 
@@ -113,10 +118,14 @@ def query(uid: str, title_id: str, q: str, k: int = 5) -> list[dict]:
     cfg = types.EmbedContentConfig(
         task_type="RETRIEVAL_QUERY", output_dimensionality=EMBED_DIM
     )
+    texts: list[types.ContentUnion] = [q]
     resp = _genai.models.embed_content(
-        model=GEMINI_EMBEDDING_001, contents=[q], config=cfg  # type: ignore[arg-type]
+        model=GEMINI_EMBEDDING_001, contents=texts, config=cfg
     )
-    qv = list(resp.embeddings[0].values)  # type: ignore[index,arg-type]
+    embeddings = resp.embeddings or []
+    if not embeddings or embeddings[0].values is None:
+        raise RuntimeError("embedding response missing values")
+    qv = list(embeddings[0].values)
     coll = (
         firestore_client.collection("users")
         .document(uid)

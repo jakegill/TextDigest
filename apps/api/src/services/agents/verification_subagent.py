@@ -188,7 +188,9 @@ _RETRY_BACKOFFS_S = (1.0, 2.0)
 
 
 async def _generate_with_retry(
-    model: str, contents: list[types.Content], config: types.GenerateContentConfig
+    model: str,
+    contents: list[types.ContentUnion],
+    config: types.GenerateContentConfig,
 ) -> types.GenerateContentResponse:
     """Call generate_content with retries on empty candidates / 429.
     Up to 3 attempts total (initial + 2 retries) with ~1s, ~2s backoff."""
@@ -196,7 +198,7 @@ async def _generate_with_retry(
     for attempt in range(len(_RETRY_BACKOFFS_S) + 1):
         try:
             response = await _client.aio.models.generate_content(
-                model=model, contents=contents, config=config,  # type: ignore[arg-type]
+                model=model, contents=contents, config=config,
             )
         except genai_errors.ClientError as e:
             if attempt < len(_RETRY_BACKOFFS_S) and getattr(e, "status_code", None) == 429:
@@ -312,9 +314,11 @@ async def _execute_action(
     return None
 
 
-def _trim_old_screenshots(contents: list[types.Content]) -> None:
+def _trim_old_screenshots(contents: list[types.ContentUnion]) -> None:
     found = 0
     for content in reversed(contents):
+        if not isinstance(content, types.Content):
+            continue
         if content.role != "user" or not content.parts:
             continue
         has_screenshot = any(
@@ -408,7 +412,7 @@ async def verify(
         vid, url, expected_title, _MAX_STEPS, _MAX_SECONDS,
     )
 
-    contents: list[types.Content] = [
+    contents: list[types.ContentUnion] = [
         types.Content(role="user", parts=[types.Part(text=f"Verify URL: {url}")])
     ]
     config = types.GenerateContentConfig(

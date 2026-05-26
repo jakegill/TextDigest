@@ -154,6 +154,22 @@ def _library_block(existing: list[dict[str, str]]) -> str:
     )
 
 
+def _find_cached_for_url(
+    cache: dict[str, dict[str, Any]], target_url: str
+) -> dict[str, Any] | None:
+    """Look up a cached verify result matching target_url against any of the
+    cached entry's input URL, resolvedUrl, or partialUrl. The model emits
+    resolved URLs in <candidates>; verify_cache is keyed by the verify input
+    URL, so direct dict lookup misses."""
+    if not target_url:
+        return None
+    for cached in cache.values():
+        for key in ("url", "resolvedUrl", "partialUrl"):
+            if cached.get(key) == target_url:
+                return cached
+    return None
+
+
 def _parse_candidates(text: str) -> list[dict[str, str]]:
     m = _CANDIDATES_RE.search(text)
     if not m:
@@ -602,6 +618,16 @@ async def stream_search(
         )
 
     candidates = _parse_candidates(final_text)
+    for c in candidates:
+        cached = _find_cached_for_url(verify_cache, c["sourceUrl"])
+        if not cached:
+            continue
+        if cached.get("taskId") and not c.get("taskId"):
+            c["taskId"] = cached["taskId"]
+        if cached.get("sourceKey") and not c.get("sourceKey"):
+            c["sourceKey"] = cached["sourceKey"]
+        if cached.get("filename") and not c.get("filename"):
+            c["filename"] = cached["filename"]
     if not candidates and best_partial is not None and best_partial.get("partialUrl"):
         pq = int(best_partial.get("partialQuality") or 0)
         pages = int(best_partial.get("pageCount") or 0)

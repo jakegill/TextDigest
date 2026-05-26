@@ -158,7 +158,6 @@ function CandidateCard({
 		<div className="flex flex-col gap-1 rounded-md border border-neutral-200 bg-white px-3 py-2">
 			<span className="truncate text-sm typeface-diatype text-neutral-900">{c.title}</span>
 			{c.author && <span className="truncate text-xs typeface-diatype text-neutral-500">{c.author}</span>}
-			{c.snippet && <span className="line-clamp-2 text-xs typeface-diatype text-neutral-600">{c.snippet}</span>}
 			<div className="mt-1 flex items-center justify-between gap-2">
 				<a
 					href={c.sourceUrl}

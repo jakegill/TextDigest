@@ -11,7 +11,7 @@ from .constants import GEMINI_3_5_FLASH
 
 logger = logging.getLogger("uvicorn.error")
 
-VERTEX_LOCATION = "us-central1"
+VERTEX_LOCATION = "global"
 _client = genai.Client(vertexai=True, project=PROJECT_ID, location=VERTEX_LOCATION)
 
 _RESEARCH_PROMPT = """You research book recommendations on a topic.

@@ -24,7 +24,7 @@ class ParseResult:
     images: dict[str, bytes]
 
 
-VERTEX_LOCATION = "us-central1"
+VERTEX_LOCATION = "global"
 
 
 def write_mineru_config() -> None:
@@ -36,7 +36,7 @@ def write_mineru_config() -> None:
     title_aided = {
         "api_key": creds.token,
         "base_url": (
-            f"https://{VERTEX_LOCATION}-aiplatform.googleapis.com"
+            "https://aiplatform.googleapis.com"
             f"/v1beta1/projects/{project}/locations/{VERTEX_LOCATION}"
             "/endpoints/openapi/"
         ),

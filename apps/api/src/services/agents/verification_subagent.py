@@ -30,7 +30,7 @@ from .playwright_computer import EnvState, PlaywrightComputer
 logger = logging.getLogger("uvicorn.error")
 
 VERTEX_LOCATION = "global"
-_FLASH_LOCATION = "us-central1"
+_FLASH_LOCATION = "global"
 _SCREEN_W, _SCREEN_H = 1280, 800
 _MAX_STEPS = 12
 _MAX_SECONDS = 60

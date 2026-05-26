@@ -14,7 +14,7 @@ from ...dependencies import PROJECT_ID
 from ...models.titles import SkeletonEntry, TocEntry
 from .constants import GEMINI_3_5_FLASH
 
-VERTEX_LOCATION = "us-central1"
+VERTEX_LOCATION = "global"
 FIRST_PAGES_TO_SHOW = 10
 PAGE_CONTENTS_TRUNCATE = 4000
 MAX_TOOL_CALLS = 400

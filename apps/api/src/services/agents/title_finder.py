@@ -30,7 +30,7 @@ from .constants import GEMINI_3_5_FLASH
 
 logger = logging.getLogger("uvicorn.error")
 
-VERTEX_LOCATION = "us-central1"
+VERTEX_LOCATION = "global"
 _MAX_ORCHESTRATOR_STEPS = 20
 
 _client = genai.Client(vertexai=True, project=PROJECT_ID, location=VERTEX_LOCATION)

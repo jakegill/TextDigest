@@ -8,7 +8,7 @@ from ...dependencies import PROJECT_ID
 from ...models.titles import CoverMetadata
 from .constants import GEMINI_3_5_FLASH, GEMINI_3_1_FLASH_LITE
 
-VERTEX_LOCATION = "us-central1"
+VERTEX_LOCATION = "global"
 
 _client = genai.Client(vertexai=True, project=PROJECT_ID, location=VERTEX_LOCATION)
 

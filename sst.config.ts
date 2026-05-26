@@ -17,8 +17,6 @@ export default $config({
 
 		const isProtected = ["staging", "prod"].includes(stage);
 
-		const project = stage === "prod" ? "text-digest-v2-prod" : stage === "staging" ? "text-digest-v2-staging" : undefined;
-
 		return {
 			name: "td",
 			removal: isProtected ? "retain" : "remove",
@@ -30,7 +28,7 @@ export default $config({
 				},
 				gcp: {
 					version: "9.25.0",
-					project,
+					project: "text-digest-497216",
 					region: "us-central1",
 				},
 				"docker-build": "0.0.17",

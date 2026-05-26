@@ -58,6 +58,7 @@ export const proxyService = new gcp.cloudrunv2.Service("proxy", {
 				ports: { containerPort: 8080 },
 				resources: {
 					limits: { cpu: "1", memory: "256Mi" },
+					cpuIdle: true,
 				},
 				envs: [{ name: "BUCKET", value: `td-${$app.stage}-web` }],
 			},

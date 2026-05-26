@@ -1,0 +1,97 @@
+name: build mineru image
+
+# Built out-of-band from `sst deploy` because the image bakes in ~5-6 GB of
+# VLM weights and the combined disk pressure of mineru + api builds was
+# exhausting the ubuntu-latest runner. AR registry cache (mode=max) makes
+# subsequent runs fast when the weight layer hasn't changed.
+
+on:
+    push:
+        branches: [staging, main]
+        paths:
+            - "apps/mineru/**"
+            - ".github/workflows/build-mineru.yml"
+    workflow_dispatch:
+        inputs:
+            stage:
+                description: "Target stage"
+                required: true
+                default: "staging"
+                type: choice
+                options:
+                    - staging
+                    - prod
+
+permissions:
+    id-token: write
+    contents: read
+
+env:
+    PROJECT_ID: text-digest-497216
+    REGION: us-central1
+
+jobs:
+    build:
+        runs-on: ubuntu-latest
+
+        concurrency:
+            group: build-mineru-${{ github.ref }}
+            cancel-in-progress: false
+
+        steps:
+            - name: Resolve stage
+              id: stage
+              run: |
+                  if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+                    echo "value=${{ github.event.inputs.stage }}" >> "$GITHUB_OUTPUT"
+                  elif [ "${{ github.ref }}" = "refs/heads/main" ]; then
+                    echo "value=prod" >> "$GITHUB_OUTPUT"
+                  else
+                    echo "value=staging" >> "$GITHUB_OUTPUT"
+                  fi
+
+            - uses: actions/checkout@v4
+
+            - name: Authenticate to Google Cloud (WIF)
+              uses: google-github-actions/auth@v2
+              with:
+                  workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+                  service_account: ${{ secrets.GCP_DEPLOY_SA }}
+
+            - uses: google-github-actions/setup-gcloud@v2
+
+            - name: Configure docker for Artifact Registry
+              run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+
+            - name: Free disk space on runner
+              # ubuntu-latest has ~14 GB free after pre-installed software; a ~10-12 GB
+              # mineru image plus build context plus cache pull will OOM the disk
+              # without this. Recovers ~30 GB.
+              run: |
+                  sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+                  docker system prune -af
+                  df -h /
+
+            - name: Set up Docker Buildx
+              uses: docker/setup-buildx-action@v3
+
+            - name: Compute image refs
+              id: refs
+              run: |
+                  STAGE="${{ steps.stage.outputs.value }}"
+                  BASE="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/td-${STAGE}-mineru/mineru"
+                  echo "tag_latest=${BASE}:latest" >> "$GITHUB_OUTPUT"
+                  echo "tag_sha=${BASE}:${{ github.sha }}" >> "$GITHUB_OUTPUT"
+                  echo "tag_cache=${BASE}:cache" >> "$GITHUB_OUTPUT"
+
+            - name: Build and push
+              uses: docker/build-push-action@v6
+              with:
+                  context: apps/mineru
+                  platforms: linux/amd64
+                  push: true
+                  tags: |
+                      ${{ steps.refs.outputs.tag_latest }}
+                      ${{ steps.refs.outputs.tag_sha }}
+                  cache-from: type=registry,ref=${{ steps.refs.outputs.tag_cache }}
+                  cache-to: type=registry,ref=${{ steps.refs.outputs.tag_cache }},mode=max,image-manifest=true

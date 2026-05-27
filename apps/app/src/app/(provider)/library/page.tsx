@@ -52,10 +52,6 @@ export default function Page() {
 			.finally(() => setIsLoading(false));
 	}, []);
 
-	// Background safety net: while any card shows isProcessing, poll the
-	// title doc every few seconds. Covers the case where the SSE stream was
-	// never opened, was killed by a server restart, or was abandoned by a
-	// remount/page refresh. Exits as soon as no cards are processing.
 	useEffect(() => {
 		const processing = titles.filter((t) => t.isProcessing);
 		if (processing.length === 0) return;
@@ -124,7 +120,7 @@ export default function Page() {
 		.slice(0, 8);
 
 	return (
-		<div className="h-screen w-screen flex justify-center">
+		<div className="h-screen w-full flex justify-center">
 			<main className="max-w-full px-4 py-8 xl:max-w-3xl h-full xl:py-16 w-full space-y-4 xl:space-y-8">
 				<div className="flex items-center justify-between">
 					<h1 className="text-xl xl:text-3xl underline items-center typeface-arizona flex gap-1">

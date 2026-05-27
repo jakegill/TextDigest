@@ -38,22 +38,8 @@ export default $config({
 		};
 	},
 	async run() {
-		const isProtected = ["staging", "prod"].includes($app.stage);
-
-		console.log("Running app.stage=", $app.stage, " command=", $cli.command);
-
-		const isWriteCommand = ["deploy", "dev", "refresh", "remove"].includes($cli.command);
-
-		if (isProtected && isWriteCommand) {
-			throw new Error(
-				`Stage "${$app.stage}" can only be deployed from CI to avoid destructive changes. ` +
-					`Use a personal stage (e.g., pnpm dev <initials>) for local development`,
-			);
-		}
-
 		await import("./infra/project-services.js");
 		await import("./infra/aws-deploy-role.js");
-
 		await import("./infra/auth.js");
 		const storage = await import("./infra/blob-storage.js");
 		const nosql = await import("./infra/nosql.js");

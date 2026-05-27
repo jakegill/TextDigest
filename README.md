@@ -1,4 +1,4 @@
-# Text Digest
+# TextDigest
 
 ## Architecture
 
@@ -27,7 +27,8 @@
 - pnpm 10+
 - Python 3.13 + [`uv`](https://docs.astral.sh/uv/)
 - Docker
-- Google Cloud CLI
+- Google Cloud CLI + Signed in
+- AWS CLI + Signed in
 - WSL (if using windows - SST requires unix environment)
 
 _See appendix for install information_
@@ -39,7 +40,7 @@ pnpm install
 pnpm exec sst install          # generates .sst/platform/ type defs
 ```
 
-Then create `apps/app/.env.local` mirroring `apps/app/.env.local.example`.
+- No .env
 
 ### Personal Dev Stages
 

@@ -7,10 +7,10 @@ options:
     machineType: E2_HIGHCPU_8
 
 steps:
-    - id: deployer-image
+    - id: sst-deploy-image
       name: gcr.io/cloud-builders/docker
       waitFor: ["-"]
-      args: ["build", "-t", "td-deployer", "-f", "ci/cloudbuild/Dockerfile", "ci/cloudbuild"]
+      args: ["build", "-t", "sst-deploy", "-f", "ci/cloudbuild/Dockerfile", "ci/cloudbuild"]
 
     - id: aws-creds
       name: amazon/aws-cli
@@ -23,24 +23,29 @@ steps:
       args: ["-c", "ci/cloudbuild/aws-creds.sh"]
 
     - id: sst-deploy
-      name: td-deployer
+      name: sst-deploy
       entrypoint: bash
-      waitFor: ["aws-creds", "deployer-image"]
+      waitFor: ["aws-creds", "sst-deploy-image"]
       args:
           - "-c"
           - |
               set -euo pipefail
+
               case "$BRANCH_NAME" in
                 staging|prod) ;;
                 *) echo "refusing to deploy from branch '$BRANCH_NAME' (expected staging|prod)" >&2; exit 1 ;;
               esac
+
+              export SST_STAGE="$BRANCH_NAME"
+
               set -a
               . /workspace/.aws-creds.env
               set +a
+
               gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
               corepack enable
               pnpm install --frozen-lockfile
               pnpm exec sst install --print-logs
-              pnpm exec sst deploy --stage "$BRANCH_NAME" --print-logs
+              pnpm exec sst deploy --stage "$SST_STAGE" --print-logs
 
 timeout: 3600s

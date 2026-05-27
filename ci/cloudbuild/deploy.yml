@@ -37,8 +37,8 @@ steps:
 
               gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
               corepack enable
-              pnpm install --frozen-lockfile
-              pnpm exec sst install --print-logs
+              pnpm install --stage "$BRANCH_NAME" --frozen-lockfile
+              pnpm exec sst install --stage "$BRANCH_NAME" --print-logs
               pnpm exec sst deploy --stage "$BRANCH_NAME" --print-logs
 
 timeout: 3600s

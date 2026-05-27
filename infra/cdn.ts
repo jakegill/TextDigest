@@ -110,6 +110,7 @@ if (!inCi) {
 		{
 			create: deployCmd,
 			update: deployCmd,
+			dir: process.cwd(),
 			triggers: [Date.now().toString()],
 			environment: {
 				NEXT_PUBLIC_API_URL: apiGatewayUrl,

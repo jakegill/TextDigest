@@ -125,7 +125,7 @@ export default function Page() {
 
 	return (
 		<div className="h-screen w-screen flex justify-center">
-			<main className="max-w-full px-4 py-8 xl:max-w-3xl min-h-[110svh] xl:py-16 w-full space-y-4 xl:space-y-8">
+			<main className="max-w-full px-4 py-8 xl:max-w-3xl h-full xl:py-16 w-full space-y-4 xl:space-y-8">
 				<div className="flex items-center justify-between">
 					<h1 className="text-xl xl:text-3xl underline items-center typeface-arizona flex gap-1">
 						<BooksIcon className="text-neutral-600 size-6 xl:size-8" />

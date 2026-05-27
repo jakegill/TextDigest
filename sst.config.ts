@@ -40,13 +40,14 @@ export default $config({
 	async run() {
 		const isProtected = ["staging", "prod"].includes($app.stage);
 
+		console.log("Running app.stage=", $app.stage, " command=", $cli.command);
+
 		const isWriteCommand = ["deploy", "dev", "refresh", "remove"].includes($cli.command);
 
-		if (isProtected && isWriteCommand && !process.env.BUILD_ID && !process.env.BOOTSTRAP) {
+		if (isProtected && isWriteCommand) {
 			throw new Error(
 				`Stage "${$app.stage}" can only be deployed from CI to avoid destructive changes. ` +
-					`Use a personal stage (e.g., pnpm deploy jg) for local development, ` +
-					`or BOOTSTRAP=1 for the one-time staging bootstrap.`,
+					`Use a personal stage (e.g., pnpm dev <initials>) for local development`,
 			);
 		}
 

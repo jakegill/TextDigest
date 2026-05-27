@@ -3,10 +3,10 @@
 // Static frontend for apps/app — GCS bucket fronted by a global HTTPS load
 // balancer with Cloud CDN. The WebDeploy command below builds apps/app
 // (output: "export") and syncs out/ to the bucket. It runs as part of the
-// deploy so NEXT_PUBLIC_* are baked from the live apiGatewayUrl + Firebase
+// deploy so NEXT_PUBLIC_* are baked from the live apiServiceUrl + Firebase
 // config rather than values guessed before those resources exist.
 
-import { apiGatewayUrl } from "./api-gateway.js";
+import { apiServiceUrl } from "./cpu.js";
 import { webAppConfig } from "./auth.js";
 import { enabledServices } from "./project-services.js";
 import { proxyService } from "./proxy.js";
@@ -111,7 +111,7 @@ new command.local.Command(
 		dir: process.cwd(),
 		triggers: [Date.now().toString()],
 		environment: {
-			NEXT_PUBLIC_API_URL: apiGatewayUrl,
+			NEXT_PUBLIC_API_URL: apiServiceUrl,
 			NEXT_PUBLIC_FIREBASE_API_KEY: webAppConfig.apply((c) => c.apiKey ?? ""),
 			NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: webAppConfig.apply((c) => c.authDomain ?? ""),
 			NEXT_PUBLIC_FIREBASE_PROJECT_ID: webAppConfig.apply((c) => c.project ?? ""),

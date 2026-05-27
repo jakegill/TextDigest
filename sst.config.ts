@@ -7,7 +7,6 @@
 //   - infra/nosql.ts         — Firestore Native
 //   - infra/blob-storage.ts  — Cloud Storage bucket
 //   - infra/cpu.ts           — Cloud Run + Artifact Registry (api)
-//   - infra/api-gateway.ts   — GCP API Gateway
 //   - infra/cdn.ts           — GCS web bucket + Cloud CDN
 //   - infra/gpu.ts           — Cloud Run on L4, inference
 //   - infra/cicd-trigger.ts  — Cloud Build Triggers (per protected stage)
@@ -46,7 +45,6 @@ export default $config({
 		const gpu = await import("./infra/gpu.js");
 		const cpu = await import("./infra/cpu.js");
 		await import("./infra/queue.js");
-		const gateway = await import("./infra/api-gateway.js");
 		await import("./infra/proxy.js");
 		const cdn = await import("./infra/cdn.js");
 		await import("./infra/cicd-trigger.js");
@@ -56,7 +54,6 @@ export default $config({
 			firestoreDb: nosql.firestoreDb.name,
 			apiServiceUrl: cpu.apiServiceUrl,
 			mineruServiceUrl: gpu.mineruServiceUrl,
-			apiGatewayUrl: gateway.apiGatewayUrl,
 			appUrl: cdn.appUrl,
 		};
 	},

@@ -22,6 +22,12 @@ RUN python3 -c "import json; p='/root/mineru.json'; d=json.load(open(p)); d['mod
 
 RUN echo "=== /root/mineru.json at end of build ===" && cat /root/mineru.json && echo "=== end ==="
 
+# mineru.json lives at /root/mineru.json (written by `mineru-models-download`
+# above). MinerU resolves the config path via `~/mineru.json` which expands
+# through HOME; Cloud Run doesn't guarantee HOME is set on the container init
+# process, so pin HOME and also pass the absolute path explicitly.
+ENV HOME=/root
+ENV MINERU_TOOLS_CONFIG_JSON=/root/mineru.json
 ENV MINERU_MODEL_SOURCE=local
 
 COPY src ./src

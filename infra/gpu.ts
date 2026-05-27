@@ -2,13 +2,22 @@
 
 // Cloud Run v2 service for apps/mineru (MinerU 3.1.x on NVIDIA L4).
 //
-// Pipeline:
-//   1. Artifact Registry repo (per stage) holds the mineru image.
-//   2. The image is built + pushed by .github/workflows/build-mineru.yml,
-//      NOT here, because the ~10–12 GB image exhausts the GitHub runner
-//      when combined with the api build inside `sst deploy`. This file
-//      only references the pre-built `:latest` tag.
-//   3. Cloud Run v2 runs the pushed image on port 30000 with one L4 GPU.
+// Deploy model:
+//   - Local `sst deploy --stage <stage>`: builds apps/mineru via the
+//     docker-build provider and pushes :${stage} to the shared td-mineru
+//     AR repo (single repo across stages so the ~18 GB model-download
+//     layers reuse via registry cache).
+//   - CI (staging/prod via GitHub Actions): build is SKIPPED — the GHA
+//     runner OOMs on the model-download layers. Cloud Run is just told to
+//     pull whatever digest :${stage} currently resolves to in AR. To get
+//     new mineru bytes into staging/prod, a human runs `sst deploy
+//     --stage staging` (or prod) from their machine; the subsequent CI
+//     run on merge just re-applies infra.
+//
+// Cloud Run pulls the resulting reference (digest-pinned locally,
+// tag-pinned in CI) on port 30000 with one GPU.
+
+import * as path from "node:path";
 
 import { dataBucket } from "./blob-storage.js";
 
@@ -17,13 +26,26 @@ const isProtectedStage = ["staging", "prod"].includes($app.stage);
 const region = "us-central1";
 const project = gcp.config.project!;
 
-// AR repo `td-mineru` is shared across stages and managed manually via gcloud,
-// not Pulumi — the image bytes are identical for staging and prod, and the
-// repo is bootstrapped once outside of `sst deploy`. Push with:
-//   docker buildx build --platform linux/amd64 \
-//     --tag us-central1-docker.pkg.dev/<project>/td-mineru/mineru:latest \
-//     --push apps/mineru
-const mineruImageUri = `${region}-docker.pkg.dev/${project}/td-mineru/mineru:latest`;
+const imageTag = $interpolate`${region}-docker.pkg.dev/${project}/td-mineru/mineru:${$app.stage}`;
+const cacheTag = $interpolate`${region}-docker.pkg.dev/${project}/td-mineru/mineru:cache`;
+
+// GHA sets CI=true; locally it's unset. See deploy-model comment at the top
+// for why we skip the build in CI.
+const isCi = !!process.env.CI;
+
+const mineruImageRef = isCi
+	? imageTag
+	: new dockerbuild.Image("mineru-image", {
+			tags: [imageTag],
+			context: { location: path.resolve("apps/mineru") },
+			platforms: ["linux/amd64"],
+			push: true,
+			cacheFrom: [{ registry: { ref: cacheTag } }],
+			cacheTo: [
+				{ registry: { ref: cacheTag, mode: "max", imageManifest: true } },
+			],
+			load: false,
+		}).ref;
 
 const mineruSa = new gcp.serviceaccount.Account("mineru-sa", {
 	accountId: `td-${$app.stage}-mineru-sa`,
@@ -60,7 +82,7 @@ export const mineruService = new gcp.cloudrunv2.Service("mineru", {
 		gpuZonalRedundancyDisabled: true,
 		containers: [
 			{
-				image: mineruImageUri,
+				image: mineruImageRef,
 				ports: { containerPort: 30000 },
 				resources: {
 					limits: {

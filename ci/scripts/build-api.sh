@@ -23,5 +23,7 @@ docker buildx build \
   --push \
   apps/api
 
-jq -r '."containerimage.digest"' /workspace/digests/api.json > /workspace/digests/api.txt
-echo "api digest: $(cat /workspace/digests/api.txt)"
+DIGEST=$(grep -E '"containerimage\.digest"' /workspace/digests/api.json | grep -oE 'sha256:[0-9a-f]{64}')
+: "${DIGEST:?failed to parse digest from api.json}"
+printf '%s\n' "$DIGEST" > /workspace/digests/api.txt
+echo "api digest: $DIGEST"

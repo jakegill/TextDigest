@@ -24,5 +24,7 @@ docker buildx build \
   --push \
   apps/mineru
 
-jq -r '."containerimage.digest"' /workspace/digests/mineru.json > /workspace/digests/mineru.txt
-echo "mineru digest: $(cat /workspace/digests/mineru.txt)"
+DIGEST=$(grep -E '"containerimage\.digest"' /workspace/digests/mineru.json | grep -oE 'sha256:[0-9a-f]{64}')
+: "${DIGEST:?failed to parse digest from mineru.json}"
+printf '%s\n' "$DIGEST" > /workspace/digests/mineru.txt
+echo "mineru digest: $DIGEST"

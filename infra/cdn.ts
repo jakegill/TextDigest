@@ -68,19 +68,6 @@ export const appUrl = $interpolate`http://${forwardingRule.ipAddress}`;
 
 export { webBucket };
 
-new gcp.identityplatform.Config(
-	"identity-config",
-	{
-		authorizedDomains: [
-			"localhost",
-			"text-digest-497216.firebaseapp.com",
-			"text-digest-497216.web.app",
-			forwardingRule.ipAddress,
-		],
-	},
-	{ dependsOn: enabledServices },
-);
-
 const deployCmd = [
 	"pnpm --filter @td/app build",
 	`gcloud storage rsync apps/app/out gs://td-${$app.stage}-web --recursive --delete-unmatched-destination-objects --cache-control='public,max-age=0,s-maxage=31536000,must-revalidate'`,

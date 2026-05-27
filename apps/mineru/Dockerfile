@@ -34,4 +34,4 @@ COPY src ./src
 EXPOSE 30000
 
 ENTRYPOINT []
-CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "30000"]
+CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "30000", "--proxy-headers", "--forwarded-allow-ips", "*"]

@@ -1,22 +1,20 @@
 /// <reference path="../.sst/platform/config.d.ts" />
 
-// Cloud Build Triggers — ci/cloudbuild/deploy.yml on git push to its stage's branch.
-
 import { awsAccountId, awsDeployRoleArn } from "./aws-deploy-role.js";
 
 const project = gcp.config.project!;
 
-const region = "us-central1";
+const connectionRegion = "us-central1";
+const repository = `projects/${project}/locations/${connectionRegion}/connections/jakegill/repositories/jakegill-TextDigest`;
 
 if ($app.stage === "staging") {
 	for (const stage of ["staging", "prod"] as const) {
 		new gcp.cloudbuild.Trigger(`${stage}-deploy-trigger`, {
 			name: `td-${stage}-deploy`,
-			location: region,
+			location: connectionRegion,
 			serviceAccount: `projects/${project}/serviceAccounts/github-actions-cicd@${project}.iam.gserviceaccount.com`,
-			github: {
-				owner: "jakegill",
-				name: "TextDigest",
+			repositoryEventConfig: {
+				repository,
 				push: { branch: `^${stage}$` },
 			},
 			filename: "ci/cloudbuild/deploy.yml",

@@ -3,7 +3,6 @@
 import * as path from "node:path";
 
 import { dataBucket } from "./blob-storage.js";
-import { inCi } from "./cicd-worker.js";
 import { mineruService, mineruServiceUrl } from "./gpu.js";
 import { enabledServices } from "./project-services.js";
 
@@ -11,6 +10,7 @@ const isProtectedStage = ["staging", "prod"].includes($app.stage);
 
 const region = "us-central1";
 const project = gcp.config.project!;
+const inCi = !!process.env.BUILD_ID;
 
 const registry = new gcp.artifactregistry.Repository(
 	"api-images",

@@ -8,11 +8,11 @@
 
 import { apiGatewayUrl } from "./api-gateway.js";
 import { webAppConfig } from "./auth.js";
-import { inCi } from "./cicd-worker.js";
 import { enabledServices } from "./project-services.js";
 import { proxyService } from "./proxy.js";
 
 const isProtectedStage = ["staging", "prod"].includes($app.stage);
+const inCi = !!process.env.BUILD_ID;
 
 const webBucket = new gcp.storage.Bucket(
 	"web",

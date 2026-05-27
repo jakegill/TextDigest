@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Build + push MinerU image; emit digest to /workspace/digests/mineru.txt.
-# Runs inside Cloud Build on the td-cicd-worker pool.
+# Runs inside Cloud Build (default pool, E2_HIGHCPU_32).
 
 set -euo pipefail
 

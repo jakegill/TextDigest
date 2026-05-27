@@ -3,12 +3,12 @@
 import * as path from "node:path";
 
 import { dataBucket } from "./blob-storage.js";
-import { inCi } from "./cicd-worker.js";
 
 const isProtectedStage = ["staging", "prod"].includes($app.stage);
 
 const region = "us-central1";
 const project = gcp.config.project!;
+const inCi = !!process.env.BUILD_ID;
 
 const imageTag = `${region}-docker.pkg.dev/${project}/td-mineru/mineru:${$app.stage}`;
 const cacheTag = `${region}-docker.pkg.dev/${project}/td-mineru/mineru:cache`;

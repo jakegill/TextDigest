@@ -10,7 +10,6 @@
 //   - infra/api-gateway.ts   — GCP API Gateway
 //   - infra/cdn.ts           — GCS web bucket + Cloud CDN
 //   - infra/gpu.ts           — Cloud Run on L4, inference
-//   - infra/cicd-worker.ts   — Cloud Build private worker pool (shared)
 //   - infra/cicd-trigger.ts  — Cloud Build Triggers (per protected stage)
 
 export default $config({
@@ -52,7 +51,6 @@ export default $config({
 		}
 
 		await import("./infra/project-services.js");
-		await import("./infra/cicd-worker.js");
 		await import("./infra/aws-deploy-role.js");
 
 		await import("./infra/auth.js");

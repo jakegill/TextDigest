@@ -2,12 +2,12 @@
 
 import * as path from "node:path";
 
-import { inCi } from "./cicd-worker.js";
 import { enabledServices } from "./project-services.js";
 
 const isProtectedStage = ["staging", "prod"].includes($app.stage);
 const region = "us-central1";
 const project = gcp.config.project!;
+const inCi = !!process.env.BUILD_ID;
 
 const registry = new gcp.artifactregistry.Repository(
 	"proxy-images",

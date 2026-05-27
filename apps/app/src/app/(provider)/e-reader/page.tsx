@@ -2,7 +2,7 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { ArrowLeftIcon, CircleNotchIcon, ListBulletsIcon } from "@phosphor-icons/react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import rehypeAutolinkHeadings from "rehype-autolink-headings";
 import rehypeHighlight from "rehype-highlight";
@@ -16,14 +16,13 @@ import { QuestionsPanel } from "@/components/reader/QuestionsPanel";
 import { SelectionBubble } from "@/components/reader/SelectionBubble";
 import { TocPanel, type TocEntry } from "@/components/reader/TocPanel";
 import { Button } from "@/components/ui/button";
+import { type Bbox, DEFAULT_BBOX, isCentered, unionBbox } from "@/hooks/useBbox";
 import { useQuestions } from "@/hooks/useQuestions";
 import { getContentList } from "@/services/api/getContentList";
 import { getTitleById } from "@/services/api/getTitleById";
 import { putTitle } from "@/services/api/putTitle";
 
 export const dynamic = "force-dynamic";
-
-type Bbox = [number, number, number, number];
 
 type ContentBlock = {
 	type: "text" | "image" | "list" | string;
@@ -37,122 +36,96 @@ type ContentBlock = {
 	page_idx: number;
 };
 
-const PAGE_NORM = 1000;
-const WIDE_FRAC = 0.7;
-const Y_OVERLAP_MIN = 0.5;
-const CENTER_TOL = 80;
-const DEFAULT_BBOX: Bbox = [0, 0, PAGE_NORM, PAGE_NORM];
+type Item = { md: string; centered: boolean };
+type Page = Item[];
 
-type Justify = "start" | "center" | "end";
-type Item = { md: string; bbox: Bbox };
-type Row = { items: Item[]; justify: Justify };
-type Page = Row[];
+const KEEP_TYPES = new Set(["text", "image", "list"]);
 
-const JUSTIFY_CLASS: Record<Justify, string> = {
-	start: "justify-start",
-	center: "justify-center",
-	end: "justify-end",
-};
-
-const unionBbox = (boxes: Bbox[]): Bbox => [
-	Math.min(...boxes.map((b) => b[0])),
-	Math.min(...boxes.map((b) => b[1])),
-	Math.max(...boxes.map((b) => b[2])),
-	Math.max(...boxes.map((b) => b[3])),
-];
-
-const isWide = (b: Bbox) => b[2] - b[0] > WIDE_FRAC * PAGE_NORM;
-
-const yOverlapFrac = (a: Bbox, b: Bbox) => {
-	const top = Math.max(a[1], b[1]);
-	const bottom = Math.min(a[3], b[3]);
-	const inter = Math.max(0, bottom - top);
-	const minH = Math.min(a[3] - a[1], b[3] - b[1]);
-	return minH > 0 ? inter / minH : 0;
-};
-
-const justifyFor = (left: number, right: number): Justify => {
-	const mid = (left + right) / 2;
-	if (Math.abs(mid - PAGE_NORM / 2) < CENTER_TOL) return "center";
-	return mid < PAGE_NORM / 2 ? "start" : "end";
-};
-
-function buildPages(blocks: ContentBlock[]): Page[] {
-	if (!blocks.length) return [];
-	const max = blocks.reduce((m, b) => Math.max(m, b.page_idx ?? 0), 0);
-	const grouped: ContentBlock[][] = Array.from({ length: max + 1 }, () => []);
-	for (const b of blocks) grouped[b.page_idx ?? 0].push(b);
-
-	const toMd = (b: ContentBlock) => {
-		if (b.type === "text") {
-			if (b.text_level && b.text_level > 0) {
-				const level = Math.min(6, b.text_level);
-				return `${"#".repeat(level)} ${b.text ?? ""}`;
-			}
-			return b.text ?? "";
+function blockToMd(b: ContentBlock): string {
+	if (b.type === "text") {
+		if (b.text_level && b.text_level > 0) {
+			const level = Math.min(6, b.text_level);
+			return `${"#".repeat(level)} ${b.text ?? ""}`;
 		}
-		if (b.type === "image") {
-			const cap = (b.image_caption ?? []).join(" ").replace(/"/g, '\\"');
-			return `![](${b.img_path ?? ""} "${cap}")`;
-		}
-		if (b.type === "list") {
-			const ordered = /ordered|ol/i.test(b.sub_type ?? "");
-			return (b.list_items ?? []).map((t, i) => (ordered ? `${i + 1}. ${t}` : `- ${t}`)).join("\n");
-		}
-		return "";
-	};
-
-	const KEEP = new Set(["text", "image", "list"]);
-
-	return grouped.map((rawItems) => {
-		const items = rawItems.filter((b) => KEEP.has(b.type));
-
-		const built: Item[] = [];
-		let i = 0;
-		while (i < items.length) {
-			const cur = items[i];
-			if (cur.type === "text" && cur.text_level === 1) {
-				const parts: string[] = [cur.text ?? ""];
-				const bboxes: Bbox[] = [cur.bbox ?? DEFAULT_BBOX];
-				i++;
-				while (i < items.length) {
-					const next = items[i];
-					if (!(next.type === "text" && next.text_level === 1)) break;
-					parts.push(next.text ?? "");
-					bboxes.push(next.bbox ?? DEFAULT_BBOX);
-					i++;
-				}
-				built.push({ md: `# ${parts.join(" ")}`, bbox: unionBbox(bboxes) });
-				continue;
-			}
-			const md = toMd(cur).trim();
-			if (md) built.push({ md, bbox: cur.bbox ?? DEFAULT_BBOX });
-			i++;
-		}
-
-		const rows: Item[][] = [];
-		for (const it of built) {
-			const last = rows[rows.length - 1];
-			const lastItem = last?.[last.length - 1];
-			const canAppend =
-				!!lastItem &&
-				!isWide(it.bbox) &&
-				!isWide(lastItem.bbox) &&
-				yOverlapFrac(lastItem.bbox, it.bbox) > Y_OVERLAP_MIN;
-			if (canAppend) {
-				last!.push(it);
-			} else {
-				rows.push([it]);
-			}
-		}
-
-		return rows.map((rowItems): Row => {
-			const left = Math.min(...rowItems.map((it) => it.bbox[0]));
-			const right = Math.max(...rowItems.map((it) => it.bbox[2]));
-			return { items: rowItems, justify: justifyFor(left, right) };
-		});
-	});
+		return b.text ?? "";
+	}
+	if (b.type === "image") {
+		const cap = (b.image_caption ?? []).join(" ").replace(/"/g, '\\"');
+		return `![](${b.img_path ?? ""} "${cap}")`;
+	}
+	if (b.type === "list") {
+		const ordered = /ordered|ol/i.test(b.sub_type ?? "");
+		return (b.list_items ?? []).map((t, i) => (ordered ? `${i + 1}. ${t}` : `- ${t}`)).join("\n");
+	}
+	return "";
 }
+
+function buildPage(blocks: ContentBlock[]): Page {
+	const items = blocks.filter((b) => KEEP_TYPES.has(b.type));
+	const built: Item[] = [];
+	let i = 0;
+	while (i < items.length) {
+		const cur = items[i];
+		if (cur.type === "text" && cur.text_level === 1) {
+			const parts: string[] = [cur.text ?? ""];
+			const bboxes: Bbox[] = [cur.bbox ?? DEFAULT_BBOX];
+			i++;
+			while (i < items.length) {
+				const next = items[i];
+				if (!(next.type === "text" && next.text_level === 1)) break;
+				parts.push(next.text ?? "");
+				bboxes.push(next.bbox ?? DEFAULT_BBOX);
+				i++;
+			}
+			built.push({ md: `# ${parts.join(" ")}`, centered: isCentered(unionBbox(bboxes)) });
+			continue;
+		}
+		const md = blockToMd(cur).trim();
+		if (md) {
+			const isImage = cur.type === "image";
+			const isTitle = cur.type === "text" && (cur.text_level ?? 0) > 0;
+			const centered = isImage || (isTitle && isCentered(cur.bbox ?? DEFAULT_BBOX));
+			built.push({ md, centered });
+		}
+		i++;
+	}
+	return built;
+}
+
+function groupBlocksByPage(blocks: ContentBlock[]): Map<number, ContentBlock[]> {
+	const map = new Map<number, ContentBlock[]>();
+	for (const b of blocks) {
+		const idx = b.page_idx ?? 0;
+		const arr = map.get(idx);
+		if (arr) arr.push(b);
+		else map.set(idx, [b]);
+	}
+	return map;
+}
+
+const CHARS_PER_LINE = 60;
+const LINE_PX = 28;
+const BLOCK_MARGIN_PX = 16;
+const IMAGE_RESERVE_PX = 600;
+const HEADING_LINE_PX: Record<number, number> = { 1: 56, 2: 48, 3: 40, 4: 36 };
+const HEADING_REGEX = /^(#{1,4})\s/;
+
+function estimateItemHeight(item: Item): number {
+	if (item.md.startsWith("![")) return IMAGE_RESERVE_PX + BLOCK_MARGIN_PX;
+	const headingMatch = item.md.match(HEADING_REGEX);
+	if (headingMatch) {
+		const level = headingMatch[1].length;
+		const lines = Math.max(1, Math.ceil(item.md.length / CHARS_PER_LINE));
+		return lines * (HEADING_LINE_PX[level] ?? 32) + BLOCK_MARGIN_PX;
+	}
+	const lines = item.md
+		.split("\n")
+		.reduce((sum, line) => sum + Math.max(1, Math.ceil(line.length / CHARS_PER_LINE)), 0);
+	return lines * LINE_PX + BLOCK_MARGIN_PX;
+}
+
+const estimatePageHeight = (page: Page): number =>
+	Math.max(200, page.reduce((sum, it) => sum + estimateItemHeight(it), 0));
 
 type MarkdownProps = React.ComponentProps<typeof ReactMarkdown>;
 
@@ -328,58 +301,104 @@ function ReaderContent() {
 	return <ReaderShell titleId={titleId} title={title} />;
 }
 
+const FALLBACK_PAGE_HEIGHT = 1200;
+const PREFETCH_AHEAD = 10;
+const PREFETCH_BEHIND = 5;
+
 function ReaderShell({ titleId, title }: { titleId: string; title: TitleData }) {
 	const router = useRouter();
 	const initialPageNumber = typeof title.pageNumber === "number" ? title.pageNumber : 0;
 	const titleName = title.title;
 	const titleAuthor = title.author ?? "";
 	const toc: TocEntry[] = Array.isArray(title.toc) ? (title.toc as TocEntry[]) : [];
+	const pageCount = typeof title.pageCount === "number" ? title.pageCount : 0;
 
 	const [isLoading, setIsLoading] = useState(true);
-	const [pages, setPages] = useState<Page[]>([]);
+	const [pages, setPages] = useState<(Page | undefined)[]>(() =>
+		Array(pageCount).fill(undefined),
+	);
 	const [pageNumber, setPageNumber] = useState(initialPageNumber);
 	const [tocOpen, setTocOpen] = useState(false);
 
 	const parentRef = useRef<HTMLDivElement | null>(null);
 	const hasInitializedSaveRef = useRef(false);
 	const hasInitializedScrollRef = useRef(false);
+	const inflightRef = useRef<Set<number>>(new Set());
 
 	const questions = useQuestions();
 
+	const estimateSize = useCallback(
+		(index: number) => {
+			const p = pages[index];
+			return p ? estimatePageHeight(p) : FALLBACK_PAGE_HEIGHT;
+		},
+		[pages],
+	);
+
 	const virtualizer = useVirtualizer({
-		count: pages.length,
+		count: pageCount,
 		getScrollElement: () => parentRef.current,
-		estimateSize: () => 1000,
-		overscan: 8,
+		estimateSize,
+		overscan: 4,
+		getItemKey: (index) => index,
 	});
 
 	useLayoutEffect(() => {
 		if (hasInitializedScrollRef.current) return;
-		if (pages.length === 0) return;
+		if (pageCount === 0) return;
 		hasInitializedScrollRef.current = true;
 
-		const target = Math.min(Math.max(0, initialPageNumber), pages.length - 1);
+		const target = Math.min(Math.max(0, initialPageNumber), pageCount - 1);
 		if (target > 0) {
 			virtualizer.scrollToIndex(target, { align: "start" });
 		}
-		setIsLoading(false);
-	}, [pages.length, initialPageNumber, virtualizer]);
+	}, [pageCount, initialPageNumber, virtualizer]);
 
 	useEffect(() => {
-		let cancelled = false;
-		(async () => {
-			const blocks: ContentBlock[] | undefined = await getContentList(titleId);
-			if (cancelled || !blocks) return;
-			setPages(buildPages(blocks));
-		})();
-		return () => {
-			cancelled = true;
-		};
-	}, [titleId]);
+		if (pageCount > 0 && pages[initialPageNumber]) setIsLoading(false);
+	}, [pages, initialPageNumber, pageCount]);
+
+	const virtualItems = virtualizer.getVirtualItems();
+	useEffect(() => {
+		if (pageCount === 0) return;
+		const lo = virtualItems.length
+			? Math.max(0, virtualItems[0].index - PREFETCH_BEHIND)
+			: Math.max(0, initialPageNumber - PREFETCH_BEHIND);
+		const hi = virtualItems.length
+			? Math.min(pageCount - 1, virtualItems[virtualItems.length - 1].index + PREFETCH_AHEAD)
+			: Math.min(pageCount - 1, initialPageNumber + PREFETCH_AHEAD);
+
+		let i = lo;
+		while (i <= hi) {
+			while (i <= hi && (pages[i] !== undefined || inflightRef.current.has(i))) i++;
+			if (i > hi) break;
+			let j = i;
+			while (j <= hi && pages[j] === undefined && !inflightRef.current.has(j)) j++;
+			const start = i;
+			const end = j - 1;
+			for (let k = start; k <= end; k++) inflightRef.current.add(k);
+			void getContentList(titleId, { startPage: start, endPage: end })
+				.then((blocks: ContentBlock[] | undefined) => {
+					if (!blocks) return;
+					const byPage = groupBlocksByPage(blocks);
+					setPages((prev) => {
+						const next = prev.slice();
+						for (let idx = start; idx <= end; idx++) {
+							next[idx] = buildPage(byPage.get(idx) ?? []);
+						}
+						return next;
+					});
+				})
+				.finally(() => {
+					for (let k = start; k <= end; k++) inflightRef.current.delete(k);
+				});
+			i = j;
+		}
+	}, [virtualItems, pages, pageCount, initialPageNumber, titleId]);
 
 	useEffect(() => {
 		const el = parentRef.current;
-		if (!el || pages.length === 0) return;
+		if (!el || pageCount === 0) return;
 		const onScroll = () => {
 			const items = virtualizer.getVirtualItems();
 			if (items.length === 0) return;
@@ -401,7 +420,7 @@ function ReaderShell({ titleId, title }: { titleId: string; title: TitleData }) 
 			el.removeEventListener("scroll", onScroll);
 			window.removeEventListener("resize", onScroll);
 		};
-	}, [pages.length, virtualizer]);
+	}, [pageCount, virtualizer]);
 
 	useEffect(() => {
 		if (!hasInitializedSaveRef.current) {
@@ -466,58 +485,34 @@ function ReaderShell({ titleId, title }: { titleId: string; title: TitleData }) 
 									transform: `translateY(${virtualItem.start}px)`,
 								}}
 							>
-								{pages[virtualItem.index]?.map((row, i) => {
-									const lonelyWide = row.items.length === 1 && isWide(row.items[0].bbox);
-									if (lonelyWide) {
-										return (
+								{pages[virtualItem.index] ? (
+									pages[virtualItem.index]!.map((item, i) =>
+										item.centered ? (
+											<div key={i} className="flex w-full justify-center">
+												<ReactMarkdown
+													remarkPlugins={MARKDOWN_REMARK_PLUGINS}
+													rehypePlugins={MARKDOWN_REHYPE_PLUGINS}
+													components={MARKDOWN_COMPONENTS}
+												>
+													{item.md}
+												</ReactMarkdown>
+											</div>
+										) : (
 											<ReactMarkdown
 												key={i}
 												remarkPlugins={MARKDOWN_REMARK_PLUGINS}
 												rehypePlugins={MARKDOWN_REHYPE_PLUGINS}
 												components={MARKDOWN_COMPONENTS}
 											>
-												{row.items[0].md}
+												{item.md}
 											</ReactMarkdown>
-										);
-									}
-									if (row.items.length === 1) {
-										return (
-											<div key={i} className={`flex w-full ${JUSTIFY_CLASS[row.justify]}`}>
-												<ReactMarkdown
-													remarkPlugins={MARKDOWN_REMARK_PLUGINS}
-													rehypePlugins={MARKDOWN_REHYPE_PLUGINS}
-													components={MARKDOWN_COMPONENTS}
-												>
-													{row.items[0].md}
-												</ReactMarkdown>
-											</div>
-										);
-									}
-									const left = Math.min(...row.items.map((it) => it.bbox[0]));
-									const right = Math.max(...row.items.map((it) => it.bbox[2]));
-									const widthPct = ((right - left) / PAGE_NORM) * 100;
-									const cols = row.items.map((it) => `${it.bbox[2] - it.bbox[0]}fr`).join(" ");
-									return (
-										<div key={i} className={`flex w-full ${JUSTIFY_CLASS[row.justify]}`}>
-											<div
-												className="grid items-end gap-4"
-												style={{ gridTemplateColumns: cols, width: `${widthPct}%` }}
-											>
-												{row.items.map((item, j) => (
-													<div key={j} className="min-w-0">
-														<ReactMarkdown
-															remarkPlugins={MARKDOWN_REMARK_PLUGINS}
-															rehypePlugins={MARKDOWN_REHYPE_PLUGINS}
-															components={MARKDOWN_COMPONENTS}
-														>
-															{item.md}
-														</ReactMarkdown>
-													</div>
-												))}
-											</div>
-										</div>
-									);
-								})}
+										),
+									)
+								) : (
+									<div className="flex h-[1200px] w-full items-center justify-center text-neutral-400">
+										<CircleNotchIcon size={24} className="animate-spin" />
+									</div>
+								)}
 							</div>
 						))}
 					</div>
@@ -526,8 +521,8 @@ function ReaderShell({ titleId, title }: { titleId: string; title: TitleData }) 
 
 			<footer className="flex w-full flex-col items-center justify-center gap-4 px-32 pt-4 pb-4 text-center text-xs typeface-diatype font-medium text-neutral-500">
 				<p>
-					Page {pageNumber + 1} of {pages.length} •{" "}
-					{pages.length > 0 ? `${Math.round(((pageNumber + 1) / pages.length) * 100)}%` : "0%"}
+					Page {pageNumber + 1} of {pageCount} •{" "}
+					{pageCount > 0 ? `${Math.round(((pageNumber + 1) / pageCount) * 100)}%` : "0%"}
 				</p>
 			</footer>
 
@@ -536,7 +531,7 @@ function ReaderShell({ titleId, title }: { titleId: string; title: TitleData }) 
 				titleId={titleId}
 				title={titleName}
 				author={titleAuthor}
-				pageContent={(pages[pageNumber] ?? []).flatMap((r) => r.items.map((i) => i.md)).join("\n\n")}
+				pageContent={(pages[pageNumber] ?? []).map((i) => i.md).join("\n\n")}
 			/>
 
 			<TocPanel
@@ -544,7 +539,7 @@ function ReaderShell({ titleId, title }: { titleId: string; title: TitleData }) 
 				onClose={() => setTocOpen(false)}
 				entries={toc}
 				onJump={(pdfPage) => {
-					const idx = Math.max(0, Math.min(pages.length - 1, pdfPage - 1));
+					const idx = Math.max(0, Math.min(pageCount - 1, pdfPage - 1));
 					virtualizer.scrollToIndex(idx, { align: "start" });
 					setPageNumber(idx);
 					setTocOpen(false);

@@ -5,14 +5,11 @@
 
 set -euo pipefail
 
-: "${_AWS_ACCOUNT_ID:?required}"
 : "${_AWS_ROLE_ARN:?required}"
 
-# 1) Get a Google ID token from the metadata server. Audience must match
-#    what's in the AWS IAM role trust policy (we use the AWS account ID).
 ID_TOKEN=$(curl -fsS \
   -H "Metadata-Flavor: Google" \
-  "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/identity?audience=${_AWS_ACCOUNT_ID}&format=full")
+  "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/identity?audience=https://sts.amazonaws.com&format=standard")
 
 # 2) Trade it for AWS creds. Session name has to be DNS-safe (no dots).
 CREDS=$(aws sts assume-role-with-web-identity \

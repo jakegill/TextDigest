@@ -15,12 +15,12 @@ let roleArnOut: $util.Output<string>;
 if ($app.stage === "staging") {
 	const oidcProvider = new aws.iam.OpenIdConnectProvider("google-oidc", {
 		url: "https://accounts.google.com",
-		clientIdLists: [accountId],
+		clientIdLists: [cicdSa.email, cicdSa.uniqueId],
 	});
 
 	const role = new aws.iam.Role("td-deploy-runner", {
 		name: "TdDeployRunner",
-		assumeRolePolicy: $util.all([oidcProvider.arn, cicdSa.uniqueId, accountId]).apply(([providerArn, saUid, awsAcct]) =>
+		assumeRolePolicy: $util.all([oidcProvider.arn, cicdSa.uniqueId]).apply(([providerArn, saUid]) =>
 			JSON.stringify({
 				Version: "2012-10-17",
 				Statement: [
@@ -28,12 +28,7 @@ if ($app.stage === "staging") {
 						Effect: "Allow",
 						Principal: { Federated: providerArn },
 						Action: "sts:AssumeRoleWithWebIdentity",
-						Condition: {
-							StringEquals: {
-								"accounts.google.com:sub": saUid,
-								"accounts.google.com:aud": awsAcct,
-							},
-						},
+						Condition: { StringEquals: { "accounts.google.com:sub": saUid } },
 					},
 				],
 			}),

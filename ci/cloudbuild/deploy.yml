@@ -1,0 +1,70 @@
+substitutions:
+    _STAGE: ""
+    _AWS_ACCOUNT_ID: ""
+    _AWS_ROLE_ARN: ""
+    # NEXT_PUBLIC_* baked into the Next.js bundle at build time.
+    _API_URL: ""
+    _FB_API_KEY: ""
+    _FB_AUTH_DOMAIN: ""
+    _FB_PROJECT_ID: ""
+
+options:
+    pool:
+        name: projects/$PROJECT_ID/locations/us-central1/workerPools/td-cicd-worker
+
+steps:
+    - id: aws-creds
+      name: amazon/aws-cli
+      entrypoint: bash
+      args: ["-c", "apk add --no-cache jq curl bash && ci/scripts/aws-creds.sh"]
+
+    - id: build-mineru
+      name: gcr.io/cloud-builders/docker
+      entrypoint: bash
+      waitFor: ["aws-creds"]
+      args: ["-c", "ci/scripts/build-mineru.sh"]
+
+    - id: build-api
+      name: gcr.io/cloud-builders/docker
+      entrypoint: bash
+      waitFor: ["aws-creds"]
+      args: ["-c", "ci/scripts/build-api.sh"]
+
+    - id: build-proxy
+      name: gcr.io/cloud-builders/docker
+      entrypoint: bash
+      waitFor: ["aws-creds"]
+      args: ["-c", "ci/scripts/build-proxy.sh"]
+
+    - id: build-app-compile
+      name: node:22
+      entrypoint: bash
+      waitFor: ["aws-creds"]
+      args: ["-c", "ci/scripts/build-app-compile.sh"]
+
+    - id: build-app-upload
+      name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+      entrypoint: bash
+      waitFor: ["build-app-compile"]
+      args: ["-c", "ci/scripts/build-app-upload.sh"]
+
+    - id: sst-deploy
+      name: node:22
+      entrypoint: bash
+      waitFor: ["build-mineru", "build-api", "build-proxy", "build-app-upload"]
+      args:
+          - "-c"
+          - |
+              set -euo pipefail
+              set -a
+              . /workspace/.aws-creds.env
+              export MINERU_IMAGE_DIGEST=$(cat /workspace/digests/mineru.txt)
+              export API_IMAGE_DIGEST=$(cat /workspace/digests/api.txt)
+              export PROXY_IMAGE_DIGEST=$(cat /workspace/digests/proxy.txt)
+              set +a
+              corepack enable
+              pnpm install --frozen-lockfile
+              pnpm exec sst install --print-logs
+              pnpm exec sst deploy --stage $_STAGE --print-logs
+
+timeout: 3600s

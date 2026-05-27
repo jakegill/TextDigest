@@ -102,6 +102,26 @@ def persist(uid: str, title_id: str, chunks: list[Chunk]) -> None:
     batch.commit()
 
 
+def delete(uid: str, title_id: str) -> None:
+    coll = (
+        firestore_client.collection("users")
+        .document(uid)
+        .collection("titles")
+        .document(title_id)
+        .collection("chunks")
+    )
+    batch = firestore_client.batch()
+    n = 0
+    for ref in coll.list_documents():
+        batch.delete(ref)
+        n += 1
+        if n % WRITE_BATCH == 0:
+            batch.commit()
+            batch = firestore_client.batch()
+    if n % WRITE_BATCH:
+        batch.commit()
+
+
 async def build(
     uid: str,
     title_id: str,

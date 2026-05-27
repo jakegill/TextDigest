@@ -7,6 +7,7 @@ from google.cloud.firestore import Query
 
 from ...dependencies import bucket, firestore_client, signing_credentials
 from ...models.titles import Title, TitleMetadata, TocEntry
+from . import vector_index
 
 MAX_PAGE_RANGE = 50
 
@@ -162,6 +163,7 @@ def delete_for_user(uid: str, title_id: str) -> None:
         .collection("titles")
         .document(title_id)
     )
-    firestore_client.recursive_delete(ref)
+    vector_index.delete(uid, title_id)
+    ref.delete()
     for blob in bucket.list_blobs(prefix=f"users/{uid}/titles/{title_id}/"):
         blob.delete()

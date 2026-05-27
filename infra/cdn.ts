@@ -14,6 +14,10 @@ import { proxyService } from "./proxy.js";
 const isProtectedStage = ["staging", "prod"].includes($app.stage);
 const inCi = !!process.env.BUILD_ID;
 
+const host = $app.stage === "prod" ? "app.textdigest.ai" : `${$app.stage}.textdigest.ai`;
+
+const webIp = isProtectedStage ? new gcp.compute.GlobalAddress("web-ip", { name: `td-${$app.stage}-web-ip` }) : undefined;
+
 const webBucket = new gcp.storage.Bucket(
 	"web",
 	{
@@ -63,9 +67,38 @@ const forwardingRule = new gcp.compute.GlobalForwardingRule("web-fwd", {
 	name: `td-${$app.stage}-web-fwd`,
 	target: httpProxy.id,
 	portRange: "80",
+	...(webIp ? { ipAddress: webIp.address } : {}),
 });
 
-export const appUrl = $interpolate`http://${forwardingRule.ipAddress}`;
+if (isProtectedStage && webIp) {
+	const cert = new gcp.compute.ManagedSslCertificate("web-cert", {
+		name: `td-${$app.stage}-web-cert`,
+		managed: { domains: [host] },
+	});
+
+	const httpsProxy = new gcp.compute.TargetHttpsProxy("web-https-proxy", {
+		name: `td-${$app.stage}-web-https`,
+		urlMap: urlMap.id,
+		sslCertificates: [cert.id],
+	});
+
+	new gcp.compute.GlobalForwardingRule("web-https-fwd", {
+		name: `td-${$app.stage}-web-https-fwd`,
+		target: httpsProxy.id,
+		ipAddress: webIp.address,
+		portRange: "443",
+	});
+
+	new gcp.dns.RecordSet("web-dns", {
+		name: `${host}.`,
+		managedZone: "textdigest",
+		type: "A",
+		ttl: 300,
+		rrdatas: [webIp.address],
+	});
+}
+
+export const appUrl = isProtectedStage ? $interpolate`https://${host}` : $interpolate`http://${forwardingRule.ipAddress}`;
 
 export { webBucket };
 

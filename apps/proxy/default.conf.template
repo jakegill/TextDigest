@@ -7,6 +7,7 @@ server {
   proxy_ssl_server_name on;
   proxy_intercept_errors on;
   recursive_error_pages on;
+  absolute_redirect off;
 
   rewrite ^/(.+)/$ /$1 last;
 
@@ -25,6 +26,11 @@ server {
   }
 
   location @index {
+    error_page 404 = @notfound;
     proxy_pass https://storage.googleapis.com/${BUCKET}$uri/index.html;
+  }
+
+  location @notfound {
+    return 302 /login;
   }
 }

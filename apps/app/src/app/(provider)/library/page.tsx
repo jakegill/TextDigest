@@ -52,10 +52,6 @@ export default function Page() {
 			.finally(() => setIsLoading(false));
 	}, []);
 
-	// Background safety net: while any card shows isProcessing, poll the
-	// title doc every few seconds. Covers the case where the SSE stream was
-	// never opened, was killed by a server restart, or was abandoned by a
-	// remount/page refresh. Exits as soon as no cards are processing.
 	useEffect(() => {
 		const processing = titles.filter((t) => t.isProcessing);
 		if (processing.length === 0) return;
@@ -124,11 +120,11 @@ export default function Page() {
 		.slice(0, 8);
 
 	return (
-		<div className="h-screen w-screen flex justify-center">
-			<main className="max-w-full px-4 py-8 xl:max-w-3xl min-h-[110svh] xl:py-16 w-full space-y-8">
+		<div className="h-screen w-full flex justify-center">
+			<main className="max-w-full px-4 py-8 xl:max-w-3xl h-full xl:py-16 w-full space-y-4 xl:space-y-8">
 				<div className="flex items-center justify-between">
-					<h1 className="text-3xl underline items-center typeface-arizona flex gap-1">
-						<BooksIcon size="28" className="text-neutral-600" />
+					<h1 className="text-xl xl:text-3xl underline items-center typeface-arizona flex gap-1">
+						<BooksIcon className="text-neutral-600 size-6 xl:size-8" />
 						My Library
 					</h1>
 					<div className="flex items-center gap-2">
@@ -136,32 +132,32 @@ export default function Page() {
 							size="lg"
 							variant="outline"
 							onClick={() => findTitle.open()}
-							className="w-fit typeface-diatype rounded-none transition-colors duration-300 border cursor-pointer text-base md:py-4"
+							className="w-fi text-sm t typeface-diatype rounded-none transition-colors duration-300 border cursor-pointer xltext-base md:py-4"
 						>
-							<MagnifyingGlassIcon />
-							Find a Title
+							<MagnifyingGlassIcon className="hidden xl:block" />
+							Find title
 						</Button>
 						<UploadDropzone onUploaded={handleUploaded} onProgress={handleProgress}>
 							<Button
 								size="lg"
 								variant="default"
-								className="w-fit typeface-diatype rounded-none hover:bg-primary-700 transition-colors duration-300 border cursor-pointer  text-base md:py-4"
+								className="w-fit typeface-diatype text-sm rounded-none hover:bg-primary-700 transition-colors duration-300 border cursor-pointer  xl:text-base md:py-4"
 							>
-								<UploadSimpleIcon />
-								Upload a Title
+								<UploadSimpleIcon className="hidden xl:block" />
+								Upload title
 							</Button>
 						</UploadDropzone>
 					</div>
 				</div>
 
 				<div className="relative">
-					<MagnifyingGlassIcon size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500" />
+					<MagnifyingGlassIcon className="absolute size-3 xl:size-4 left-3 top-1/2 -translate-y-1/2 text-neutral-500" />
 					<input
 						type="search"
 						value={query}
 						onChange={(e) => setQuery(e.target.value)}
 						placeholder="Search titles…"
-						className="w-full typeface-diatype border bg-white border-neutral-200 py-2 pl-9 pr-3 text-base placeholder:text-neutral-500 focus:border-neutral-400 focus:outline-none transition-colors"
+						className="w-full typeface-diatype border bg-white border-neutral-200 py-1 xl:py-2 pl-9 pr-3 text-base xl:placeholder:text-base placeholder:text-sm placeholder:text-neutral-500 focus:border-neutral-400 focus:outline-none transition-colors"
 					/>
 				</div>
 
@@ -176,14 +172,27 @@ export default function Page() {
 					</section>
 				)}
 
-				<section className="space-y-3">
+				<section className="space-y-2">
 					<h2 className="text-xl typeface-arizona text-neutral-600 font-medium">All titles</h2>
 					{isLoading ? (
 						<SkeletonGrid />
 					) : filtered.length === 0 ? (
-						<p className="text-sm text-neutral-500 typeface-diatype">
-							{titles.length === 0 ? "No titles yet — upload one to get started." : "No matches."}
-						</p>
+						<div className="space-y-2">
+							<p className="text-sm xl:text-base text-neutral-500 flex flex-col typeface-diatype">
+								{titles.length === 0 ? "No titles yet — upload one to get started." : "No matches."}
+							</p>
+							{titles.length === 0 && (
+								<Button
+									size="lg"
+									variant="outline"
+									onClick={() => findTitle.open()}
+									className="w-fi text-sm t typeface-diatype bg-neutral-100 rounded-none transition-colors duration-300 border cursor-pointer xltext-base md:py-4"
+								>
+									<MagnifyingGlassIcon className="hidden xl:block" />
+									Find title
+								</Button>
+							)}
+						</div>
 					) : (
 						<ul className="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-4 gap-6">
 							{filtered

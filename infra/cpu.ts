@@ -132,7 +132,8 @@ export const apiService = new gcp.cloudrunv2.Service("api", {
 	},
 });
 
-// Public invocation — the gateway sits in front and does its own auth.
+// Public invocation — the frontend calls this URL directly; FastAPI verifies
+// the Firebase bearer token per request (see apps/api/src/middleware/auth.py).
 new gcp.cloudrunv2.ServiceIamMember("api-public", {
 	name: apiService.name,
 	location: apiService.location,

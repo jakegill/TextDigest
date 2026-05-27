@@ -19,7 +19,6 @@ steps:
       env:
           - "_AWS_ACCOUNT_ID=$_AWS_ACCOUNT_ID"
           - "_AWS_ROLE_ARN=$_AWS_ROLE_ARN"
-          - "_STAGE=$BRANCH_NAME"
       args: ["-c", "ci/cloudbuild/aws-creds.sh"]
 
     - id: sst-deploy

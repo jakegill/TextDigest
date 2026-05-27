@@ -1,6 +1,8 @@
 import os
 
-from google.cloud import firestore, storage  # type: ignore[attr-defined]
+import google.auth
+from google.auth import impersonated_credentials
+from google.cloud import firestore, storage
 
 DATA_BUCKET = os.environ["DATA_BUCKET"]
 MINERU_URL = os.environ["MINERU_URL"]
@@ -14,3 +16,11 @@ storage_client = storage.Client()
 bucket = storage_client.bucket(DATA_BUCKET)
 
 firestore_client = firestore.Client(project=PROJECT_ID, database=FIRESTORE_DATABASE)
+
+source_credentials, _ = google.auth.default()
+signing_credentials = impersonated_credentials.Credentials(
+    source_credentials=source_credentials,
+    target_principal=API_SA_EMAIL,
+    target_scopes=["https://www.googleapis.com/auth/devstorage.read_only"],
+    lifetime=3600,
+)

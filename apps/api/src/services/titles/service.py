@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 from fastapi import HTTPException, status
 from google.cloud.firestore import Query
 
-from ...dependencies import bucket, firestore_client
+from ...dependencies import bucket, firestore_client, signing_credentials
 from ...models.titles import Title, TitleMetadata, TocEntry
 
 MAX_PAGE_RANGE = 50
@@ -16,6 +16,7 @@ def _signed_url(key: str, ttl_seconds: int = 3600) -> str:
         version="v4",
         expiration=timedelta(seconds=ttl_seconds),
         method="GET",
+        credentials=signing_credentials,
     )
 
 

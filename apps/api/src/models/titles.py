@@ -41,9 +41,10 @@ class TitleMetadata(BaseModel):
 
 
 class Title(TitleMetadata):
-    # markdownUrl, toc, tocSource are populated once the parse + toc stages
-    # complete. While isProcessing is true (or if processing failed), they may
-    # still be null / empty.
+    # markdownUrl, toc, tocSource, pageCount are populated once the parse + toc
+    # stages complete. While isProcessing is true (or if processing failed),
+    # they may still be null / empty.
     markdownUrl: str | None = None
     toc: list[TocEntry] = []
     tocSource: str | None = None
+    pageCount: int | None = None

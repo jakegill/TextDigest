@@ -1,3 +1,4 @@
+import asyncio
 import json
 from datetime import datetime, timedelta, timezone
 
@@ -6,6 +7,8 @@ from google.cloud.firestore import Query
 
 from ...dependencies import bucket, firestore_client
 from ...models.titles import Title, TitleMetadata, TocEntry
+
+MAX_PAGE_RANGE = 50
 
 
 def _signed_url(key: str, ttl_seconds: int = 3600) -> str:
@@ -40,6 +43,7 @@ def _to_title(d: dict) -> Title:
         markdownUrl=_signed_url(parsed_md_key) if parsed_md_key else None,
         toc=[TocEntry(**e) for e in (d.get("toc") or [])],
         tocSource=d.get("tocSource"),
+        pageCount=d.get("pageCount"),
         createdAt=d["createdAt"],
         isProcessing=bool(d.get("isProcessing", False)),
         processingError=d.get("processingError"),
@@ -73,28 +77,60 @@ def get_for_user(uid: str, title_id: str) -> Title:
     return _to_title({**snap.to_dict(), "titleId": snap.id})
 
 
-def content_list_for_user(uid: str, title_id: str) -> list[dict]:
+async def content_list_for_user(
+    uid: str,
+    title_id: str,
+    start_page: int,
+    end_page: int,
+) -> list[dict]:
+    if start_page < 0 or end_page < start_page:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "invalid page range",
+        )
+    if end_page - start_page + 1 > MAX_PAGE_RANGE:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            f"page range exceeds max of {MAX_PAGE_RANGE}",
+        )
+
     ref = (
         firestore_client.collection("users")
         .document(uid)
         .collection("titles")
         .document(title_id)
     )
-    snap = ref.get()
+    snap = await asyncio.to_thread(ref.get)
     if not snap.exists:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "title not found")
     d = snap.to_dict() or {}
-    key = d.get("contentListKey")
-    if not key:
+    pages_prefix = d.get("pagesPrefix")
+    page_count = d.get("pageCount")
+    if not pages_prefix or not page_count:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "title not finished processing",
+        )
+
+    capped_end = min(end_page, page_count - 1)
+    if capped_end < start_page:
         return []
-    blocks: list[dict] = json.loads(
-        bucket.blob(key).download_as_bytes().decode("utf-8")
+
+    shard_keys = [
+        f"{pages_prefix}/{i:05d}.json" for i in range(start_page, capped_end + 1)
+    ]
+    shards = await asyncio.gather(
+        *(asyncio.to_thread(bucket.blob(k).download_as_bytes) for k in shard_keys)
     )
+
     images_prefix = f"users/{uid}/titles/{title_id}/"
-    for b in blocks:
-        p = b.get("img_path")
-        if p:
-            b["img_path"] = _signed_url(images_prefix + p)
+    blocks: list[dict] = []
+    for raw in shards:
+        for b in json.loads(raw.decode("utf-8")):
+            p = b.get("img_path")
+            if p:
+                b["img_path"] = _signed_url(images_prefix + p)
+            blocks.append(b)
     return blocks
 
 

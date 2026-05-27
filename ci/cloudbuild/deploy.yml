@@ -16,7 +16,7 @@ steps:
     - id: aws-creds
       name: amazon/aws-cli
       entrypoint: bash
-      args: ["-c", "apk add --no-cache jq curl bash && ci/scripts/aws-creds.sh"]
+      args: ["-c", "ci/scripts/aws-creds.sh"]
 
     - id: build-mineru
       name: gcr.io/cloud-builders/docker

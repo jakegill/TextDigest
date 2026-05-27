@@ -31,13 +31,6 @@ steps:
           - |
               set -euo pipefail
 
-              case "$BRANCH_NAME" in
-                staging|prod) ;;
-                *) echo "refusing to deploy from branch '$BRANCH_NAME' (expected staging|prod)" >&2; exit 1 ;;
-              esac
-
-              export SST_STAGE="$BRANCH_NAME"
-
               set -a
               . /workspace/.aws-creds.env
               set +a
@@ -46,6 +39,6 @@ steps:
               corepack enable
               pnpm install --frozen-lockfile
               pnpm exec sst install --print-logs
-              pnpm exec sst deploy --stage "$SST_STAGE" --print-logs
+              pnpm exec sst deploy --stage "$BRANCH_NAME" --print-logs
 
 timeout: 3600s

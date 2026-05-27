@@ -7,9 +7,11 @@
 //   - infra/nosql.ts         — Firestore Native
 //   - infra/blob-storage.ts  — Cloud Storage bucket
 //   - infra/cpu.ts           — Cloud Run + Artifact Registry (api)
-//   - infra/api-gateway.ts   — GCP API Gatewa
+//   - infra/api-gateway.ts   — GCP API Gateway
 //   - infra/cdn.ts           — GCS web bucket + Cloud CDN
 //   - infra/gpu.ts           — Cloud Run on L4, inference
+//   - infra/cicd-worker.ts   — Cloud Build private worker pool (shared)
+//   - infra/cicd-trigger.ts  — Cloud Build Triggers (per protected stage)
 
 export default $config({
 	app(input) {
@@ -41,14 +43,17 @@ export default $config({
 
 		const isWriteCommand = ["deploy", "dev", "refresh", "remove"].includes($cli.command);
 
-		if (isProtected && isWriteCommand && !process.env.GITHUB_ACTIONS) {
+		if (isProtected && isWriteCommand && !process.env.BUILD_ID && !process.env.BOOTSTRAP) {
 			throw new Error(
-				`Stage "${$app.stage}" can only be deployed from GitHub Actions to avoid destructive changes. ` +
-					`Use a personal stage (e.g., sst dev --stage jg) for local development.`,
+				`Stage "${$app.stage}" can only be deployed from CI to avoid destructive changes. ` +
+					`Use a personal stage (e.g., pnpm deploy jg) for local development, ` +
+					`or BOOTSTRAP=1 for the one-time staging bootstrap.`,
 			);
 		}
 
 		await import("./infra/project-services.js");
+		await import("./infra/cicd-worker.js");
+		await import("./infra/aws-deploy-role.js");
 
 		await import("./infra/auth.js");
 		const storage = await import("./infra/blob-storage.js");
@@ -59,6 +64,7 @@ export default $config({
 		const gateway = await import("./infra/api-gateway.js");
 		await import("./infra/proxy.js");
 		const cdn = await import("./infra/cdn.js");
+		await import("./infra/cicd-trigger.js");
 
 		return {
 			dataBucket: storage.dataBucket.name,

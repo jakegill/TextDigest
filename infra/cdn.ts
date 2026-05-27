@@ -8,6 +8,7 @@
 
 import { apiGatewayUrl } from "./api-gateway.js";
 import { webAppConfig } from "./auth.js";
+import { inCi } from "./cicd-worker.js";
 import { enabledServices } from "./project-services.js";
 import { proxyService } from "./proxy.js";
 
@@ -68,28 +69,25 @@ export const appUrl = $interpolate`http://${forwardingRule.ipAddress}`;
 
 export { webBucket };
 
-const deployCmd = [
-	"pnpm --filter @td/app build",
-	`gcloud storage rsync apps/app/out gs://td-${$app.stage}-web --recursive --delete-unmatched-destination-objects --cache-control='public,max-age=0,s-maxage=31536000,must-revalidate'`,
-	`gcloud storage objects update 'gs://td-${$app.stage}-web/_next/static/**' --cache-control='max-age=31536000,public,immutable'`,
-	`gcloud compute url-maps invalidate-cdn-cache td-${$app.stage}-web-urlmap --path='/*' --async`,
-].join(" && ");
+if (!inCi) {
+	const deployCmd = $interpolate`pnpm --filter @td/app build && gcloud storage rsync apps/app/out gs://td-${$app.stage}-web --recursive --delete-unmatched-destination-objects --cache-control='public,max-age=0,s-maxage=31536000,must-revalidate' && gcloud storage objects update 'gs://td-${$app.stage}-web/_next/static/**' --cache-control='max-age=31536000,public,immutable' && gcloud compute url-maps invalidate-cdn-cache td-${$app.stage}-web-urlmap --path='/*' --async`;
 
-new command.local.Command(
-	"WebDeploy",
-	{
-		create: deployCmd,
-		update: deployCmd,
-		dir: process.cwd(),
-		environment: {
-			NEXT_PUBLIC_API_URL: apiGatewayUrl,
-			NEXT_PUBLIC_FIREBASE_API_KEY: webAppConfig.apply((c) => c.apiKey ?? ""),
-			NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: webAppConfig.apply((c) => c.authDomain ?? ""),
-			NEXT_PUBLIC_FIREBASE_PROJECT_ID: webAppConfig.apply((c) => c.project ?? ""),
+	new command.local.Command(
+		"WebDeploy",
+		{
+			create: deployCmd,
+			update: deployCmd,
+			triggers: [Date.now().toString()],
+			environment: {
+				NEXT_PUBLIC_API_URL: apiGatewayUrl,
+				NEXT_PUBLIC_FIREBASE_API_KEY: webAppConfig.apply((c) => c.apiKey ?? ""),
+				NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: webAppConfig.apply((c) => c.authDomain ?? ""),
+				NEXT_PUBLIC_FIREBASE_PROJECT_ID: webAppConfig.apply((c) => c.project ?? ""),
+			},
 		},
-	},
-	{ dependsOn: [webBucket, backendService, urlMap, forwardingRule] },
-);
+		{ dependsOn: [webBucket, backendService, urlMap, forwardingRule] },
+	);
+}
 
 // Local dev — runs next dev in a multiplexer pane during `sst dev`. No-op on deploy.
 new sst.x.DevCommand("WebApp", {

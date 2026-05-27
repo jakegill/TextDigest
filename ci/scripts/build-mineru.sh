@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Build + push MinerU image; emit digest to /workspace/digests/mineru.txt.
-# Runs inside Cloud Build (default pool, E2_HIGHCPU_32).
+# Runs inside Cloud Build (default pool, E2_HIGHCPU_8).
 
 set -euo pipefail
 

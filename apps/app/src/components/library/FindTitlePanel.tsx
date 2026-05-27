@@ -336,7 +336,7 @@ export function FindTitlePanel({
 		<div
 			ref={panelRef}
 			data-open={findTitle.isOpen}
-			className="fixed right-0 top-0 z-60 flex h-svh w-full flex-col border-l border-neutral-200 bg-neutral-50 shadow-xl transition-transform translate-x-full data-[open=true]:translate-x-0 md:w-128"
+			className="fixed right-0 top-0 z-60 flex h-svh w-full max-w-full max-h-[100svh] flex-col border-l border-neutral-200 bg-neutral-50 shadow-xl transition-transform translate-x-full data-[open=true]:translate-x-0 lg:w-128"
 		>
 			<div className="flex h-16 items-center justify-between border-b border-neutral-200 px-4 py-3">
 				<div className="flex items-center gap-2">
@@ -448,7 +448,7 @@ export function FindTitlePanel({
 							}
 						}}
 						placeholder="Describe a book you're looking for…"
-						className="min-h-24 w-full flex-1 resize-none bg-transparent p-2 text-sm typeface-diatype text-neutral-900 outline-none placeholder:text-sm placeholder:font-light placeholder:text-neutral-500"
+						className="min-h-24 w-full flex-1 resize-none bg-transparent p-2 typeface-diatype text-neutral-900 outline-none placeholder:text-sm placeholder:font-light placeholder:text-neutral-500"
 					/>
 				</div>
 

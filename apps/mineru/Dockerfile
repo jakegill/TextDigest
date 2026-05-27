@@ -13,7 +13,7 @@ RUN pip install --no-cache-dir \
         "google-auth>=2.35.0" \
         "google-cloud-storage>=2.18.0"
 
-RUN huggingface-cli download opendatalab/MinerU2.5-Pro-2605-1.2B \
+RUN hf download opendatalab/MinerU2.5-Pro-2605-1.2B \
       --local-dir /models/MinerU2.5-Pro-2605-1.2B
 
 RUN mineru-models-download -s huggingface -m pipeline

@@ -10,7 +10,6 @@ const isProtectedStage = ["staging", "prod"].includes($app.stage);
 
 const region = "us-central1";
 const project = gcp.config.project!;
-const inCi = !!process.env.BUILD_ID;
 
 const registry = new gcp.artifactregistry.Repository(
 	"api-images",
@@ -34,23 +33,19 @@ const registry = new gcp.artifactregistry.Repository(
 const imageTag = $interpolate`${region}-docker.pkg.dev/${project}/${registry.repositoryId}/api:latest`;
 const cacheTag = $interpolate`${region}-docker.pkg.dev/${project}/${registry.repositoryId}/api:cache`;
 
-const apiImageRef = inCi
-	? $interpolate`${region}-docker.pkg.dev/${project}/${registry.repositoryId}/api@${process.env.API_IMAGE_DIGEST!}`
-	: new dockerbuild.Image(
-			"api-image",
-			{
-				tags: [imageTag],
-				context: { location: path.resolve("apps/api") },
-				platforms: ["linux/amd64"],
-				push: true,
-				cacheFrom: [{ registry: { ref: cacheTag } }],
-				cacheTo: [
-					{ registry: { ref: cacheTag, mode: "max", imageManifest: true } },
-				],
-				load: false,
-			},
-			{ dependsOn: [registry] },
-		).ref;
+const apiImageRef = new dockerbuild.Image(
+	"api-image",
+	{
+		tags: [imageTag],
+		context: { location: path.resolve("apps/api") },
+		platforms: ["linux/amd64"],
+		push: true,
+		cacheFrom: [{ registry: { ref: cacheTag } }],
+		cacheTo: [{ registry: { ref: cacheTag, mode: "max", imageManifest: true } }],
+		load: false,
+	},
+	{ dependsOn: [registry] },
+).ref;
 
 export const apiSa = new gcp.serviceaccount.Account("api-sa", {
 	accountId: `td-${$app.stage}-api-sa`,

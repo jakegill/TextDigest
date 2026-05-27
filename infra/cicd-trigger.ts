@@ -18,8 +18,9 @@ if ($app.stage === "staging") {
 				push: { branch: `^${stage}$` },
 			},
 			filename: "ci/cloudbuild/deploy.yml",
+			// _STAGE is no longer passed — deploy.yml derives the stage from
+			// $BRANCH_NAME so the git ref is the single source of truth.
 			substitutions: {
-				_STAGE: stage,
 				_AWS_ACCOUNT_ID: awsAccountId,
 				_AWS_ROLE_ARN: awsDeployRoleArn,
 			},

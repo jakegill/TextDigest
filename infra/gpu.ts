@@ -8,24 +8,19 @@ const isProtectedStage = ["staging", "prod"].includes($app.stage);
 
 const region = "us-central1";
 const project = gcp.config.project!;
-const inCi = !!process.env.BUILD_ID;
 
 const imageTag = `${region}-docker.pkg.dev/${project}/td-mineru/mineru:${$app.stage}`;
 const cacheTag = `${region}-docker.pkg.dev/${project}/td-mineru/mineru:cache`;
 
-const mineruImageRef = inCi
-	? `${region}-docker.pkg.dev/${project}/td-mineru/mineru@${process.env.MINERU_IMAGE_DIGEST!}`
-	: new dockerbuild.Image("mineru-image", {
-			tags: [imageTag],
-			context: { location: path.resolve("apps/mineru") },
-			platforms: ["linux/amd64"],
-			push: true,
-			cacheFrom: [{ registry: { ref: cacheTag } }],
-			cacheTo: [
-				{ registry: { ref: cacheTag, mode: "max", imageManifest: true } },
-			],
-			load: false,
-		}).ref;
+const mineruImageRef = new dockerbuild.Image("mineru-image", {
+	tags: [imageTag],
+	context: { location: path.resolve("apps/mineru") },
+	platforms: ["linux/amd64"],
+	push: true,
+	cacheFrom: [{ registry: { ref: cacheTag } }],
+	cacheTo: [{ registry: { ref: cacheTag, mode: "max", imageManifest: true } }],
+	load: false,
+}).ref;
 
 const mineruSa = new gcp.serviceaccount.Account("mineru-sa", {
 	accountId: `td-${$app.stage}-mineru-sa`,

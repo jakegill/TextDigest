@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# Exchange a Google-issued ID token for short-lived AWS creds via
-# sts:AssumeRoleWithWebIdentity. Writes /workspace/.aws-creds.env which the
-# sst-deploy step sources.
+
+# Exchange a Google-issued ID token for short-lived AWS creds for sst state bucket 
 
 set -euo pipefail
 

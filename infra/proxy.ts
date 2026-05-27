@@ -7,7 +7,6 @@ import { enabledServices } from "./project-services.js";
 const isProtectedStage = ["staging", "prod"].includes($app.stage);
 const region = "us-central1";
 const project = gcp.config.project!;
-const inCi = !!process.env.BUILD_ID;
 
 const registry = new gcp.artifactregistry.Repository(
 	"proxy-images",
@@ -31,23 +30,19 @@ const registry = new gcp.artifactregistry.Repository(
 const imageTag = $interpolate`${region}-docker.pkg.dev/${project}/${registry.repositoryId}/proxy:latest`;
 const cacheTag = $interpolate`${region}-docker.pkg.dev/${project}/${registry.repositoryId}/proxy:cache`;
 
-const proxyImageRef = inCi
-	? $interpolate`${region}-docker.pkg.dev/${project}/${registry.repositoryId}/proxy@${process.env.PROXY_IMAGE_DIGEST!}`
-	: new dockerbuild.Image(
-			"proxy-image",
-			{
-				tags: [imageTag],
-				context: { location: path.resolve("apps/proxy") },
-				platforms: ["linux/amd64"],
-				push: true,
-				cacheFrom: [{ registry: { ref: cacheTag } }],
-				cacheTo: [
-					{ registry: { ref: cacheTag, mode: "max", imageManifest: true } },
-				],
-				load: false,
-			},
-			{ dependsOn: [registry] },
-		).ref;
+const proxyImageRef = new dockerbuild.Image(
+	"proxy-image",
+	{
+		tags: [imageTag],
+		context: { location: path.resolve("apps/proxy") },
+		platforms: ["linux/amd64"],
+		push: true,
+		cacheFrom: [{ registry: { ref: cacheTag } }],
+		cacheTo: [{ registry: { ref: cacheTag, mode: "max", imageManifest: true } }],
+		load: false,
+	},
+	{ dependsOn: [registry] },
+).ref;
 
 const proxySa = new gcp.serviceaccount.Account("proxy-sa", {
 	accountId: `td-${$app.stage}-proxy-sa`,

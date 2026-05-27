@@ -1,18 +1,25 @@
-# Text Digest
+# TextDigest
 
 ## Architecture
 
+- Monorepo, multiple services
+
 ```
-text-digest/
-├── apps/
-│   ├── app/        # Next.js web app
+/
+├── apps/           # Services: frontend, api, ml inference
+│   │
+│   ├── app/        # Next.js web app (frontend)
+│   ├── proxy/      # Nginx proxy for nextjs build + cdn (DNT)
 │   ├── api/        # FastAPI api
-│   └── mineru/     # MinerU inference pipeline
-├── infra/          # IaC SST, GCP
+│   └── mineru/     # MinerU inference service
+│
+├── ci/             # CI/CD via Google Cloud Build
+│
+├── infra/          # IaC via SST Framework, Google Cloud Provider
 └── sst.config.ts
 ```
 
-## Development Workflow
+## Local Development Workflow
 
 ### Prerequisites
 
@@ -20,7 +27,8 @@ text-digest/
 - pnpm 10+
 - Python 3.13 + [`uv`](https://docs.astral.sh/uv/)
 - Docker
-- Google Cloud CLI
+- Google Cloud CLI + Signed in
+- AWS CLI + Signed in
 - WSL (if using windows - SST requires unix environment)
 
 _See appendix for install information_
@@ -32,7 +40,7 @@ pnpm install
 pnpm exec sst install          # generates .sst/platform/ type defs
 ```
 
-Then create `apps/app/.env.local` mirroring `apps/app/.env.local.example`.
+- No .env
 
 ### Personal Dev Stages
 
@@ -57,7 +65,7 @@ pnpm exec sst remove --stage jg     # deletes all resources for this stage
 
 ---
 
-## Github Branching Workflow
+## Github & CICD Workflow
 
 ```
 feature branch (<initials>/<feature-name>, e.g. jg/health-endpoint)
@@ -69,19 +77,23 @@ feature branch (<initials>/<feature-name>, e.g. jg/health-endpoint)
       prod           ← PR from staging + approval
 ```
 
+### Prereq: Bootstrap CI Runner
+
+- One per repo. (DONE)
+
+```bash
+BOOTSTRAP=1 pnpm exec sst deploy --stage staging
+```
+
 ### 1. Merge to staging
 
 - Open a PR from your feature branch into `staging`.
-- Smoke test on live deployed staging endpoint
+- Push/merge into staging triggers deployment in GCP.
 
 ### 2. Promote to prod
 
-1. Open a PR from `staging` into `prod`. This is a promotion — staging must already have been tested.
-2. Merging triggers `deploy-prod.yml` (gated on `head.ref == 'staging'`).
-
-### Stage retention
-
-Both `staging` and `prod` use `removal: "retain"` — an accidental `sst remove` skips destroy calls and leaves resources orphaned rather than deleted.
+1. Open a PR from `staging` into `prod`.
+2. Merging triggers deployment to prod in GCP.
 
 ---
 

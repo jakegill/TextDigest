@@ -116,7 +116,7 @@ async def stage_process(
         final_source_key = f"users/{uid}/titles/{title_id}/source.pdf"
         cover_key = f"users/{uid}/titles/{title_id}/cover.png"
         parsed_md_key = f"users/{uid}/titles/{title_id}/parsed.md"
-        content_list_key = f"users/{uid}/titles/{title_id}/content_list.json"
+        pages_prefix = f"users/{uid}/titles/{title_id}/pages"
         toc_key = f"users/{uid}/titles/{title_id}/toc.json"
         images_prefix = f"users/{uid}/titles/{title_id}/images"
 
@@ -175,15 +175,30 @@ async def stage_process(
             parsed[:300],
         )
 
-        with timed(task_id, "upload parsed.md + content_list.json"):
+        page_count = (
+            max((b.get("page_idx", 0) for b in content_list), default=-1) + 1
+        )
+        pages_by_idx: dict[int, list[dict]] = {i: [] for i in range(page_count)}
+        for b in content_list:
+            pages_by_idx.setdefault(b.get("page_idx", 0), []).append(b)
+
+        with timed(
+            task_id,
+            f"upload parsed.md + {page_count} page shards",
+        ):
             await asyncio.to_thread(
                 _upload, parsed_md_key, parsed.encode("utf-8"), "text/markdown"
             )
-            await asyncio.to_thread(
-                _upload,
-                content_list_key,
-                json.dumps(content_list).encode("utf-8"),
-                "application/json",
+            await asyncio.gather(
+                *(
+                    asyncio.to_thread(
+                        _upload,
+                        f"{pages_prefix}/{i:05d}.json",
+                        json.dumps(pages_by_idx[i]).encode("utf-8"),
+                        "application/json",
+                    )
+                    for i in range(page_count)
+                )
             )
 
         await asyncio.to_thread(
@@ -244,7 +259,8 @@ async def stage_process(
                 title_id,
                 fields={
                     "parsedMdKey": parsed_md_key,
-                    "contentListKey": content_list_key,
+                    "pagesPrefix": pages_prefix,
+                    "pageCount": page_count,
                     "tocKey": toc_key,
                     "toc": [e.model_dump() for e in toc_entries],
                     "tocSource": toc_source,

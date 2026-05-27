@@ -50,9 +50,11 @@ async def get_title(
 @router.get("/{title_id}/content_list")
 async def get_content_list(
     title_id: str,
+    startPage: int,
+    endPage: int,
     uid: Annotated[str, Depends(get_current_uid)],
 ) -> list[dict]:
-    return await asyncio.to_thread(service.content_list_for_user, uid, title_id)
+    return await service.content_list_for_user(uid, title_id, startPage, endPage)
 
 
 @router.delete("/{title_id}", status_code=status.HTTP_204_NO_CONTENT)

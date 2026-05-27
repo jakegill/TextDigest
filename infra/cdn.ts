@@ -1,10 +1,10 @@
 /// <reference path="../.sst/platform/config.d.ts" />
 
 // Static frontend for apps/app — GCS bucket fronted by a global HTTPS load
-// balancer with Cloud CDN.
-//
-// `apps/app` builds with `output: "export"` into out/. Uploading out/ to
-// webBucket is NOT done here — only the bucket + LB/CDN path are stood up.
+// balancer with Cloud CDN. The WebDeploy command below builds apps/app
+// (output: "export") and syncs out/ to the bucket. It runs as part of the
+// deploy so NEXT_PUBLIC_* are baked from the live apiGatewayUrl + Firebase
+// config rather than values guessed before those resources exist.
 
 import { apiGatewayUrl } from "./api-gateway.js";
 import { webAppConfig } from "./auth.js";
@@ -12,6 +12,10 @@ import { enabledServices } from "./project-services.js";
 import { proxyService } from "./proxy.js";
 
 const isProtectedStage = ["staging", "prod"].includes($app.stage);
+
+const host = $app.stage === "prod" ? "app.textdigest.ai" : `${$app.stage}.textdigest.ai`;
+
+const webIp = isProtectedStage ? new gcp.compute.GlobalAddress("web-ip", { name: `td-${$app.stage}-web-ip` }) : undefined;
 
 const webBucket = new gcp.storage.Bucket(
 	"web",
@@ -62,18 +66,42 @@ const forwardingRule = new gcp.compute.GlobalForwardingRule("web-fwd", {
 	name: `td-${$app.stage}-web-fwd`,
 	target: httpProxy.id,
 	portRange: "80",
+	...(webIp ? { ipAddress: webIp.address } : {}),
 });
 
-export const appUrl = $interpolate`http://${forwardingRule.ipAddress}`;
+if (isProtectedStage && webIp) {
+	const cert = new gcp.compute.ManagedSslCertificate("web-cert", {
+		name: `td-${$app.stage}-web-cert`,
+		managed: { domains: [host] },
+	});
+
+	const httpsProxy = new gcp.compute.TargetHttpsProxy("web-https-proxy", {
+		name: `td-${$app.stage}-web-https`,
+		urlMap: urlMap.id,
+		sslCertificates: [cert.id],
+	});
+
+	new gcp.compute.GlobalForwardingRule("web-https-fwd", {
+		name: `td-${$app.stage}-web-https-fwd`,
+		target: httpsProxy.id,
+		ipAddress: webIp.address,
+		portRange: "443",
+	});
+
+	new gcp.dns.RecordSet("web-dns", {
+		name: `${host}.`,
+		managedZone: "textdigest",
+		type: "A",
+		ttl: 300,
+		rrdatas: [webIp.address],
+	});
+}
+
+export const appUrl = isProtectedStage ? $interpolate`https://${host}` : $interpolate`http://${forwardingRule.ipAddress}`;
 
 export { webBucket };
 
-const deployCmd = [
-	"pnpm --filter @td/app build",
-	`gcloud storage rsync apps/app/out gs://td-${$app.stage}-web --recursive --delete-unmatched-destination-objects --cache-control='public,max-age=0,s-maxage=31536000,must-revalidate'`,
-	`gcloud storage objects update 'gs://td-${$app.stage}-web/_next/static/**' --cache-control='max-age=31536000,public,immutable'`,
-	`gcloud compute url-maps invalidate-cdn-cache td-${$app.stage}-web-urlmap --path='/*' --async`,
-].join(" && ");
+const deployCmd = $interpolate`pnpm --filter @td/app build && gcloud storage rsync apps/app/out gs://td-${$app.stage}-web --recursive --delete-unmatched-destination-objects --cache-control='public,max-age=0,s-maxage=31536000,must-revalidate' && gcloud storage objects update 'gs://td-${$app.stage}-web/_next/static/**' --cache-control='max-age=31536000,public,immutable' && gcloud compute url-maps invalidate-cdn-cache td-${$app.stage}-web-urlmap --path='/*' --async`;
 
 new command.local.Command(
 	"WebDeploy",
@@ -81,6 +109,7 @@ new command.local.Command(
 		create: deployCmd,
 		update: deployCmd,
 		dir: process.cwd(),
+		triggers: [Date.now().toString()],
 		environment: {
 			NEXT_PUBLIC_API_URL: apiGatewayUrl,
 			NEXT_PUBLIC_FIREBASE_API_KEY: webAppConfig.apply((c) => c.apiKey ?? ""),

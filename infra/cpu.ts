@@ -1,12 +1,5 @@
 /// <reference path="../.sst/platform/config.d.ts" />
 
-// Cloud Run v2 service for apps/api (FastAPI).
-//
-// Pipeline:
-//   1. Artifact Registry repo (per stage) holds the api image.
-//   2. docker-build provider builds apps/api/ and pushes it.
-//   3. Cloud Run v2 runs the pushed image on port 8080 for Fast API.
-
 import * as path from "node:path";
 
 import { dataBucket } from "./blob-storage.js";
@@ -40,15 +33,19 @@ const registry = new gcp.artifactregistry.Repository(
 const imageTag = $interpolate`${region}-docker.pkg.dev/${project}/${registry.repositoryId}/api:latest`;
 const cacheTag = $interpolate`${region}-docker.pkg.dev/${project}/${registry.repositoryId}/api:cache`;
 
-const apiImage = new dockerbuild.Image("api-image", {
-	tags: [imageTag],
-	context: { location: path.resolve("apps/api") },
-	platforms: ["linux/amd64"],
-	push: true,
-	cacheFrom: [{ registry: { ref: cacheTag } }],
-	cacheTo: [{ registry: { ref: cacheTag, mode: "max", imageManifest: true } }],
-	load: false,
-});
+const apiImageRef = new dockerbuild.Image(
+	"api-image",
+	{
+		tags: [imageTag],
+		context: { location: path.resolve("apps/api") },
+		platforms: ["linux/amd64"],
+		push: true,
+		cacheFrom: [{ registry: { ref: cacheTag } }],
+		cacheTo: [{ registry: { ref: cacheTag, mode: "max", imageManifest: true } }],
+		load: false,
+	},
+	{ dependsOn: [registry] },
+).ref;
 
 export const apiSa = new gcp.serviceaccount.Account("api-sa", {
 	accountId: `td-${$app.stage}-api-sa`,
@@ -105,7 +102,7 @@ export const apiService = new gcp.cloudrunv2.Service("api", {
 		serviceAccount: apiSa.email,
 		containers: [
 			{
-				image: apiImage.ref,
+				image: apiImageRef,
 				ports: { containerPort: 8080 },
 				resources: {
 					limits: {

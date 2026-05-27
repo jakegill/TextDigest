@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import os
@@ -8,6 +9,7 @@ import google.auth
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from google.auth.transport.requests import Request as GoogleRequest
 from google.cloud import storage
+from google.cloud.storage import transfer_manager
 from mineru.backend.hybrid import hybrid_model_output_to_middle_json as _h
 from mineru.cli.common import do_parse
 
@@ -102,11 +104,18 @@ async def parse(
         images_dir = next(root.rglob("images"), None)
         if images_dir and images_dir.is_dir():
             bucket = gcs_client.bucket(DATA_BUCKET)
-            for p in images_dir.iterdir():
-                if not p.is_file():
-                    continue
-                blob = bucket.blob(f"{images_prefix}/{p.name}")
-                blob.upload_from_filename(str(p))
-                logger.info("uploaded %s/%s", images_prefix, p.name)
+            filenames = [p.name for p in images_dir.iterdir() if p.is_file()]
+            if filenames:
+                await asyncio.to_thread(
+                    transfer_manager.upload_many_from_filenames,
+                    bucket,
+                    filenames,
+                    source_directory=str(images_dir),
+                    blob_name_prefix=f"{images_prefix}/",
+                    worker_type=transfer_manager.THREAD,
+                    max_workers=16,
+                    raise_exception=True,
+                )
+                logger.info("uploaded %d images to %s", len(filenames), images_prefix)
 
     return {"markdown": markdown, "content_list": content_list}

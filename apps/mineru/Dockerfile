@@ -6,15 +6,14 @@ WORKDIR /app
 
 RUN pip install --no-cache-dir \
         "mineru[pipeline] @ git+https://github.com/jakegill/MinerU.git@master" \
-        "huggingface_hub[cli]" \
+        "huggingface_hub" \
         "fastapi>=0.115.0" \
         "uvicorn[standard]>=0.32.0" \
         "python-multipart>=0.0.20" \
         "google-auth>=2.35.0" \
         "google-cloud-storage>=2.18.0"
 
-RUN huggingface-cli download opendatalab/MinerU2.5-Pro-2605-1.2B \
-      --local-dir /models/MinerU2.5-Pro-2605-1.2B
+RUN python3 -c "from huggingface_hub import snapshot_download; snapshot_download('opendatalab/MinerU2.5-Pro-2605-1.2B', local_dir='/models/MinerU2.5-Pro-2605-1.2B')"
 
 RUN mineru-models-download -s huggingface -m pipeline
 

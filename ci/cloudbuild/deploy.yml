@@ -1,0 +1,43 @@
+substitutions:
+    _AWS_ACCOUNT_ID: ""
+    _AWS_ROLE_ARN: ""
+
+options:
+    logging: CLOUD_LOGGING_ONLY
+    machineType: E2_HIGHCPU_8
+
+steps:
+    - id: sst-deploy-image
+      name: gcr.io/cloud-builders/docker
+      waitFor: ["-"]
+      args: ["build", "-t", "sst-deploy", "-f", "ci/cloudbuild/Dockerfile", "ci/cloudbuild"]
+
+    - id: aws-creds
+      name: amazon/aws-cli
+      entrypoint: bash
+      waitFor: ["-"]
+      env:
+          - "_AWS_ACCOUNT_ID=$_AWS_ACCOUNT_ID"
+          - "_AWS_ROLE_ARN=$_AWS_ROLE_ARN"
+      args: ["-c", "ci/cloudbuild/aws-creds.sh"]
+
+    - id: sst-deploy
+      name: sst-deploy
+      entrypoint: bash
+      waitFor: ["aws-creds", "sst-deploy-image"]
+      args:
+          - "-c"
+          - |
+              set -euo pipefail
+
+              set -a
+              . /workspace/.aws-creds.env
+              set +a
+
+              gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
+              corepack enable
+              pnpm install --frozen-lockfile
+              pnpm exec sst install --stage "$BRANCH_NAME" --print-logs
+              pnpm exec sst deploy --stage "$BRANCH_NAME" --print-logs
+
+timeout: 3600s

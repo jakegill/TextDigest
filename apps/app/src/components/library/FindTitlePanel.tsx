@@ -21,9 +21,10 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
 import { Button } from "@/components/ui/button";
+import { SideDrawer } from "@/components/ui/side-drawer";
 import { TextShimmer } from "@/components/ui/text-shimmer";
 import type { UploadedTitle } from "@/components/upload-dropzone";
-import type { UseFindTitleReturn } from "@/hooks/useFindTitle";
+import type { TimedAction, UseFindTitleReturn } from "@/hooks/useFindTitle";
 import type { AgentAction, LibraryItem, SubagentName, TitleCandidate } from "@/services/api/findTitle";
 import { ingestFoundTitle } from "@/services/api/ingestFoundTitle";
 import { subscribeToTitleProgress, type TitleProgressEvent } from "@/services/api/titleEvents";
@@ -119,6 +120,35 @@ function actionLabel(a: AgentAction): string {
 	}
 }
 
+function formatElapsed(ms: number): string {
+	const s = Math.round(ms / 1000);
+	if (s < 1) return "<1s";
+	if (s < 60) return `${s}s`;
+	const m = Math.floor(s / 60);
+	const rem = s % 60;
+	return rem ? `${m}m ${rem}s` : `${m}m`;
+}
+
+function signatureVerb(a: AgentAction): string {
+	switch (a.kind) {
+		case "browse":
+			return `Browsed ${prettyHost(a.url)}`;
+		case "browser_search":
+			return `Searched "${a.query}"`;
+		case "verify":
+			return `Browsed ${prettyHost(a.url)}`;
+		case "search":
+			return `Searched the web for "${a.query}"`;
+		case "research":
+			return `Researched ${a.topic}`;
+	}
+}
+
+function signatureLabel(a: AgentAction, durationMs?: number): string {
+	const base = signatureVerb(a);
+	return durationMs === undefined ? base : `${base} for ${formatElapsed(durationMs)}`;
+}
+
 function AddToLibraryButton({ state, disabled, onClick }: { state: IngestState; disabled?: boolean; onClick: () => void }) {
 	const variants: Record<IngestState, { label: string; icon: React.ReactNode; className: string; disabled: boolean }> = {
 		idle: {
@@ -206,7 +236,7 @@ function AssistantTurn({
 }: {
 	content: string;
 	candidates?: TitleCandidate[];
-	actions?: AgentAction[];
+	actions?: TimedAction[];
 	ingestStates: Record<string, IngestState>;
 	onAdd: (c: TitleCandidate) => void;
 }) {
@@ -214,10 +244,10 @@ function AssistantTurn({
 		<div className="flex flex-col gap-2">
 			{actions && actions.length > 0 && (
 				<div className="flex flex-col gap-0.5">
-					{actions.map((a, i) => (
+					{actions.map((t, i) => (
 						<div key={i} className="flex items-center gap-1.5 text-xs typeface-diatype text-neutral-500">
 							<SparkleIcon size={12} className="shrink-0" />
-							<span className="truncate">{actionLabel(a)}</span>
+							<span className="truncate">{signatureLabel(t.action, t.durationMs)}</span>
 						</div>
 					))}
 				</div>
@@ -254,7 +284,6 @@ export function FindTitlePanel({
 	const [ingestStates, setIngestStates] = useState<Record<string, IngestState>>({});
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
 	const bodyRef = useRef<HTMLDivElement>(null);
-	const panelRef = useRef<HTMLDivElement>(null);
 
 	const handleAdd = async (c: TitleCandidate) => {
 		if (!c.taskId || !c.sourceKey) return;
@@ -300,27 +329,6 @@ export function FindTitlePanel({
 	}, [findTitle.isOpen]);
 
 	useEffect(() => {
-		if (!findTitle.isOpen) return;
-		let active = false;
-		const raf = requestAnimationFrame(() => {
-			active = true;
-		});
-		const onPointerDown = (e: MouseEvent) => {
-			if (!active) return;
-			const target = e.target as HTMLElement | null;
-			if (!target) return;
-			if (panelRef.current?.contains(target)) return;
-			if (target.closest('[role="menu"],[role="menuitem"],[data-base-ui-popup]')) return;
-			findTitle.close();
-		};
-		document.addEventListener("mousedown", onPointerDown);
-		return () => {
-			cancelAnimationFrame(raf);
-			document.removeEventListener("mousedown", onPointerDown);
-		};
-	}, [findTitle.isOpen, findTitle.close, findTitle]);
-
-	useEffect(() => {
 		const el = bodyRef.current;
 		if (el) el.scrollTop = el.scrollHeight;
 	}, [findTitle.conversation, findTitle.streamingText, findTitle.streamingCandidates, findTitle.isStreaming]);
@@ -331,14 +339,12 @@ export function FindTitlePanel({
 	};
 
 	const liveNarration = stripSentinel(findTitle.streamingText);
+	const shimmerActive = findTitle.isStreaming && findTitle.streamingCandidates.length === 0;
+	const liveActions = shimmerActive ? findTitle.actions.slice(0, -1) : findTitle.actions;
 
 	return (
-		<div
-			ref={panelRef}
-			data-open={findTitle.isOpen}
-			className="fixed right-0 top-0 z-60 flex h-svh w-full max-w-full max-h-[100svh] flex-col border-l border-neutral-200 bg-neutral-50 shadow-xl transition-transform translate-x-full data-[open=true]:translate-x-0 lg:w-128"
-		>
-			<div className="flex h-16 items-center justify-between border-b border-neutral-200 px-4 py-3">
+		<div className="flex h-full w-full flex-col">
+			<header className="flex flex-shrink-0 h-16 items-center justify-between border-b border-neutral-200 px-4 py-3">
 				<div className="flex items-center gap-2">
 					<MagnifyingGlassIcon size={16} className="text-neutral-700" />
 					<span className="font-medium typeface-diatype text-neutral-900">
@@ -381,9 +387,14 @@ export function FindTitlePanel({
 						<XIcon size={16} />
 					</Button>
 				</div>
-			</div>
+			</header>
 
-			<div ref={bodyRef} className="flex flex-1 flex-col gap-4 py-4 overflow-y-auto px-4 ">
+			<main ref={bodyRef} className="flex flex-1 flex-col gap-4 py-4 overflow-y-auto px-4 ">
+				{findTitle.conversation.length === 0 && !findTitle.isStreaming && (
+					<p className="m-auto max-w-xs text-center text-sm italic typeface-diatype text-neutral-600">
+						State the title you are looking for, and I&apos;ll find it online to upload
+					</p>
+				)}
 				{findTitle.conversation.map((t, i) =>
 					t.role === "user" ? (
 						<div
@@ -405,85 +416,87 @@ export function FindTitlePanel({
 				)}
 
 				{findTitle.isStreaming &&
-					(liveNarration || findTitle.streamingCandidates.length > 0 || findTitle.actions.length > 0) && (
+					(liveNarration || findTitle.streamingCandidates.length > 0 || liveActions.length > 0) && (
 						<AssistantTurn
 							content={liveNarration}
 							candidates={findTitle.streamingCandidates}
-							actions={findTitle.actions}
+							actions={liveActions}
 							ingestStates={ingestStates}
 							onAdd={handleAdd}
 						/>
 					)}
 
-				{findTitle.isStreaming && findTitle.streamingCandidates.length === 0 && (
+				{shimmerActive && (
 					<div className="flex items-center gap-2 text-neutral-700">
 						<SparkleIcon size={16} className="shrink-0" />
 						<p className="min-w-0 text-sm line-clamp-1 typeface-diatype">
 							<TextShimmer>
 								{findTitle.actions.length > 0
-									? actionLabel(findTitle.actions[findTitle.actions.length - 1])
+									? actionLabel(findTitle.actions[findTitle.actions.length - 1].action)
 									: statusLabel(findTitle.activeSubagent)}
 							</TextShimmer>
 						</p>
 					</div>
 				)}
-			</div>
+			</main>
 
-			<form
-				className="relative flex-shrink-0 p-4"
-				onSubmit={(e) => {
-					e.preventDefault();
-					handleSearch(message);
-				}}
-			>
-				<div className="flex min-h-24 w-full flex-col rounded-md border border-neutral-200 bg-neutral-100">
-					<textarea
-						ref={textareaRef}
-						value={message}
-						onChange={(e) => setMessage(e.target.value)}
-						onKeyDown={(e) => {
-							if (e.key === "Enter" && !e.shiftKey) {
-								e.preventDefault();
-								handleSearch(message);
-							}
-						}}
-						placeholder="Describe a book you're looking for…"
-						className="min-h-24 w-full flex-1 resize-none bg-transparent p-2 typeface-diatype text-neutral-900 outline-none placeholder:text-sm placeholder:font-light placeholder:text-neutral-500"
-					/>
-				</div>
+			<footer className="flex flex-col">
+				<form
+					className="relative flex-shrink-0 p-2"
+					onSubmit={(e) => {
+						e.preventDefault();
+						handleSearch(message);
+					}}
+				>
+					<div className="flex min-h-24 w-full flex-col rounded-md border border-neutral-200 bg-neutral-100">
+						<textarea
+							ref={textareaRef}
+							value={message}
+							onChange={(e) => setMessage(e.target.value)}
+							onKeyDown={(e) => {
+								if (e.key === "Enter" && !e.shiftKey) {
+									e.preventDefault();
+									handleSearch(message);
+								}
+							}}
+							placeholder="Describe a book you're looking for…"
+							className="min-h-24 w-full flex-1 resize-none bg-transparent p-2 typeface-diatype text-neutral-900 outline-none placeholder:text-sm placeholder:font-light placeholder:text-neutral-500"
+						/>
+					</div>
 
-				<div className="absolute right-5 bottom-5 left-5 z-10 flex items-center justify-between gap-2">
-					<button
-						type="button"
-						onClick={findTitle.reset}
-						disabled={findTitle.isStreaming}
-						className="flex cursor-pointer items-center gap-1 rounded-md border border-neutral-200 bg-neutral-50 px-2 py-1 text-sm typeface-diatype text-neutral-600 transition-colors duration-300 hover:bg-neutral-100 hover:text-neutral-900 active:scale-95 disabled:opacity-50"
-					>
-						<ArrowClockwiseIcon size={16} />
-						Reset
-					</button>
-
-					{findTitle.isStreaming ? (
+					<div className="absolute right-4 bottom-4 left-4 z-10 flex items-center justify-between gap-2">
 						<button
 							type="button"
-							onClick={findTitle.stop}
-							className="flex cursor-pointer items-center gap-1 rounded-md bg-neutral-200 px-2 py-1 text-sm typeface-diatype text-neutral-800 transition-colors duration-300 hover:bg-neutral-300 active:scale-95"
+							onClick={findTitle.reset}
+							disabled={findTitle.isStreaming}
+							className="flex cursor-pointer items-center gap-1 rounded-md border border-neutral-200 bg-neutral-50 px-2 py-1 text-sm typeface-diatype text-neutral-600 transition-colors duration-300 hover:bg-neutral-100 hover:text-neutral-900 active:scale-95 disabled:opacity-50"
 						>
-							<StopIcon size={16} weight="fill" className="text-neutral-600" />
-							Stop
+							<ArrowClockwiseIcon size={16} />
+							Reset
 						</button>
-					) : (
-						<button
-							type="submit"
-							disabled={!message.trim()}
-							className="flex cursor-pointer items-center gap-1 rounded-md border border-primary-800 bg-primary-600 px-2 py-1 text-sm typeface-diatype text-primary-50 transition-colors duration-300 hover:bg-primary-700 active:scale-95 disabled:cursor-not-allowed disabled:opacity-70"
-						>
-							<ArrowUpIcon size={16} />
-							Search
-						</button>
-					)}
-				</div>
-			</form>
+
+						{findTitle.isStreaming ? (
+							<button
+								type="button"
+								onClick={findTitle.stop}
+								className="flex cursor-pointer items-center gap-1 rounded-md bg-neutral-200 px-2 py-1 text-sm typeface-diatype text-neutral-800 transition-colors duration-300 hover:bg-neutral-300 active:scale-95"
+							>
+								<StopIcon size={16} weight="fill" className="text-neutral-600" />
+								Stop
+							</button>
+						) : (
+							<button
+								type="submit"
+								disabled={!message.trim()}
+								className="flex cursor-pointer items-center gap-1 rounded-md border border-primary-800 bg-primary-600 px-2 py-1 text-sm typeface-diatype text-primary-50 transition-colors duration-300 hover:bg-primary-700 active:scale-95 disabled:cursor-not-allowed disabled:opacity-70"
+							>
+								<ArrowUpIcon size={16} />
+								Search
+							</button>
+						)}
+					</div>
+				</form>
+			</footer>
 		</div>
 	);
 }

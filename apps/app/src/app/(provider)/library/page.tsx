@@ -8,6 +8,7 @@ import { toast } from "sonner";
 
 import { FindTitlePanel } from "@/components/library/FindTitlePanel";
 import { Button } from "@/components/ui/button";
+import { SideDrawer } from "@/components/ui/side-drawer";
 import { UploadDropzone, type UploadedTitle } from "@/components/upload-dropzone";
 import { useFindTitle } from "@/hooks/useFindTitle";
 import { deleteTitle } from "@/services/api/deleteTitle";
@@ -52,6 +53,10 @@ export default function Page() {
 			.finally(() => setIsLoading(false));
 	}, []);
 
+	// Background safety net: while any card shows isProcessing, poll the
+	// title doc every few seconds. Covers the case where the SSE stream was
+	// never opened, was killed by a server restart, or was abandoned by a
+	// remount/page refresh. Exits as soon as no cards are processing.
 	useEffect(() => {
 		const processing = titles.filter((t) => t.isProcessing);
 		if (processing.length === 0) return;
@@ -120,8 +125,8 @@ export default function Page() {
 		.slice(0, 8);
 
 	return (
-		<div className="h-screen w-full flex justify-center">
-			<main className="max-w-full px-4 py-8 xl:max-w-3xl h-full xl:py-16 w-full space-y-4 xl:space-y-8">
+		<div className="h-screen w-screen flex justify-center">
+			<main className="max-w-full px-4 py-8 xl:max-w-3xl xl:py-16 w-full space-y-4 xl:space-y-8">
 				<div className="flex items-center justify-between">
 					<h1 className="text-xl xl:text-3xl underline items-center typeface-arizona flex gap-1">
 						<BooksIcon className="text-neutral-600 size-6 xl:size-8" />
@@ -204,12 +209,14 @@ export default function Page() {
 					)}
 				</section>
 			</main>
-			<FindTitlePanel
-				findTitle={findTitle}
-				library={titles.map((t) => ({ title: t.title, author: t.author }))}
-				onUploaded={handleUploaded}
-				onProgress={handleProgress}
-			/>
+			<SideDrawer isOpen={findTitle.isOpen} onClose={findTitle.close} className="lg:w-128">
+				<FindTitlePanel
+					findTitle={findTitle}
+					library={titles.map((t) => ({ title: t.title, author: t.author }))}
+					onUploaded={handleUploaded}
+					onProgress={handleProgress}
+				/>
+			</SideDrawer>
 		</div>
 	);
 }

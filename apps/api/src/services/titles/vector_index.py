@@ -1,6 +1,5 @@
 import asyncio
 from dataclasses import dataclass
-from typing import Callable
 
 from google import genai
 from google.cloud.firestore_v1.base_vector_query import DistanceMeasure
@@ -52,10 +51,7 @@ def chunk(content_list: list[dict]) -> list[Chunk]:
     return chunks
 
 
-def embed(
-    chunks: list[Chunk],
-    on_progress: Callable[[float], None] | None = None,
-) -> None:
+def embed(chunks: list[Chunk]) -> None:
     cfg = types.EmbedContentConfig(
         task_type="RETRIEVAL_DOCUMENT", output_dimensionality=EMBED_DIM
     )
@@ -72,8 +68,6 @@ def embed(
             if values is None:
                 raise RuntimeError("embedding response missing values")
             c.embedding = list(values)
-        if on_progress and total:
-            on_progress(min(1.0, (i + len(batch)) / total))
 
 
 def persist(uid: str, title_id: str, chunks: list[Chunk]) -> None:
@@ -126,10 +120,9 @@ async def build(
     uid: str,
     title_id: str,
     content_list: list[dict],
-    on_progress: Callable[[float], None] | None = None,
 ) -> int:
     chunks = chunk(content_list)
-    await asyncio.to_thread(embed, chunks, on_progress)
+    await asyncio.to_thread(embed, chunks)
     await asyncio.to_thread(persist, uid, title_id, chunks)
     return len(chunks)
 

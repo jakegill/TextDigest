@@ -22,7 +22,6 @@ def _doc(uid: str, task_id: str):
 def init(uid: str, task_id: str) -> None:
     _doc(uid, task_id).set(
         {
-            "percent": 0,
             "stage": "queued",
             "titleId": None,
             "error": None,
@@ -35,14 +34,13 @@ def update(
     uid: str,
     task_id: str,
     *,
-    percent: int,
     stage: str,
     title_id: str | None = None,
     title: str | None = None,
     author: str | None = None,
     cover_url: str | None = None,
 ) -> None:
-    patch: dict = {"percent": percent, "stage": stage, "updatedAt": SERVER_TIMESTAMP}
+    patch: dict = {"stage": stage, "updatedAt": SERVER_TIMESTAMP}
     if title_id is not None:
         patch["titleId"] = title_id
     if title is not None:
@@ -52,7 +50,7 @@ def update(
     if cover_url is not None:
         patch["coverUrl"] = cover_url
     _doc(uid, task_id).set(patch, merge=True)
-    logger.info("[progress %s] write stage=%s percent=%d", task_id, stage, percent)
+    logger.info("[progress %s] write stage=%s", task_id, stage)
 
 
 def fail(uid: str, task_id: str, error: str) -> None:
@@ -73,7 +71,6 @@ def read(uid: str, task_id: str) -> dict | None:
     d = snap.to_dict() or {}
     updated_at = d.get("updatedAt")
     return {
-        "percent": int(d.get("percent", 0)),
         "stage": d.get("stage", "queued"),
         "titleId": d.get("titleId"),
         "title": d.get("title"),

@@ -3,6 +3,7 @@
 import { CircleNotchIcon } from "@phosphor-icons/react/dist/csr/CircleNotch";
 import { useState } from "react";
 import { useDropzone } from "react-dropzone";
+import { toast } from "sonner";
 
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
@@ -70,9 +71,17 @@ export function UploadDropzone({
 						});
 						setOpen(false);
 						setIsLoading(false);
+						toast.success("Upload successful", {
+							description: `${e.title} is now processing.`,
+						});
 					}
 
-					if (e.stage === "done" || e.stage === "failed") {
+					if (e.stage === "done") {
+						toast.success("Processing complete", {
+							description: `${e.title ?? "Your title"} is ready to read.`,
+						});
+						ac.abort();
+					} else if (e.stage === "failed") {
 						ac.abort();
 					}
 				},
@@ -132,9 +141,9 @@ function stageLabel(e: TitleProgressEvent): string {
 		case "metadata":
 			return "Reading cover…";
 		case "parsing":
-			return `Parsing… ${e.percent}%`;
+			return "Parsing…";
 		case "vectorizing":
-			return `Vectorizing… ${e.percent}%`;
+			return "Vectorizing…";
 		case "toc":
 			return "Extracting TOC…";
 		case "writing":

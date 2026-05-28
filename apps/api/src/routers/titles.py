@@ -1,10 +1,11 @@
 import asyncio
 import json
 import logging
+import uuid
 from datetime import datetime
 from typing import Annotated, AsyncIterator
 
-from fastapi import APIRouter, Depends, Request, UploadFile, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
@@ -22,6 +23,23 @@ SSE_MAX_DURATION_S = 60 * 30  # 30 min cap — pipeline finishes well within thi
 
 class _ProcessRequest(BaseModel):
     uid: str
+    taskId: str
+    sourceKey: str
+    filename: str | None = None
+
+
+class _UploadUrlRequest(BaseModel):
+    filename: str | None = None
+    contentType: str = "application/pdf"
+
+
+class _UploadUrlResponse(BaseModel):
+    taskId: str
+    sourceKey: str
+    uploadUrl: str
+
+
+class _StartProcessingRequest(BaseModel):
     taskId: str
     sourceKey: str
     filename: str | None = None
@@ -76,19 +94,38 @@ async def update_title(
     )
 
 
+@router.post("/upload-url")
+async def create_upload_url(
+    body: _UploadUrlRequest,
+    uid: Annotated[str, Depends(get_current_uid)],
+) -> _UploadUrlResponse:
+    task_id = str(uuid.uuid4())
+    source_key = f"users/{uid}/pending/{task_id}/source.pdf"
+    upload_url = await asyncio.to_thread(
+        service.signed_upload_url, source_key, body.contentType
+    )
+    return _UploadUrlResponse(
+        taskId=task_id, sourceKey=source_key, uploadUrl=upload_url
+    )
+
+
 @router.post("", status_code=status.HTTP_202_ACCEPTED)
 async def upload_title(
     request: Request,
-    file: UploadFile,
+    body: _StartProcessingRequest,
     uid: Annotated[str, Depends(get_current_uid)],
 ) -> dict[str, str]:
-    pdf_bytes = await file.read()
-    task_id, source_key = await flows.stage_upload(uid, pdf_bytes, file.filename)
+    expected_key = f"users/{uid}/pending/{body.taskId}/source.pdf"
+    if body.sourceKey != expected_key:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, "sourceKey does not match uid/taskId"
+        )
+    await asyncio.to_thread(progress.init, uid, body.taskId)
     api_base_url = str(request.base_url).rstrip("/")
     await cloud_tasks.enqueue_process(
-        api_base_url, uid, task_id, source_key, file.filename
+        api_base_url, uid, body.taskId, body.sourceKey, body.filename
     )
-    return {"taskId": task_id}
+    return {"taskId": body.taskId}
 
 
 @router.get("/processing/{task_id}/events")
@@ -110,11 +147,10 @@ async def processing_events(
                     if payload != last_payload:
                         emits += 1
                         logger.info(
-                            "[sse %s] emit #%d stage=%s percent=%s",
+                            "[sse %s] emit #%d stage=%s",
                             task_id,
                             emits,
                             doc.get("stage"),
-                            doc.get("percent"),
                         )
                         yield f"data: {payload}\n\n".encode("utf-8")
                         last_payload = payload

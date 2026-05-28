@@ -13,17 +13,6 @@ from . import cover, mineru, progress, service, toc, vector_index
 
 logger = logging.getLogger("uvicorn.error")
 
-# Pipeline percent budgets: keep monotonic across stages.
-PCT_QUEUED = 0
-PCT_COVER = 3
-PCT_METADATA = 8
-PCT_PARSING_START = 10
-PCT_PARSING_END = 75
-PCT_VECTORIZING_END = 90
-PCT_TOC_END = 98
-PCT_DONE = 100
-
-
 @contextmanager
 def timed(task_id: str, step: str) -> Iterator[None]:
     logger.info("[%s] %s...", task_id, step)
@@ -36,28 +25,6 @@ def timed(task_id: str, step: str) -> Iterator[None]:
 
 def _upload(key: str, data: bytes, content_type: str) -> None:
     bucket.blob(key).upload_from_string(data, content_type=content_type)
-
-
-async def stage_upload(
-    uid: str, pdf_bytes: bytes, filename: str | None
-) -> tuple[str, str]:
-    """POST /titles handler calls this. Fast: GCS upload of source.pdf to a
-    pending area + init the progress doc. Returns (task_id, source_key)."""
-    task_id = str(uuid.uuid4())
-    source_key = f"users/{uid}/pending/{task_id}/source.pdf"
-
-    logger.info(
-        "[%s] uid=%s upload received: %s (%.1f KB)",
-        task_id,
-        uid,
-        filename,
-        len(pdf_bytes) / 1024,
-    )
-    with timed(task_id, "upload source.pdf → gcs (pending)"):
-        await asyncio.to_thread(_upload, source_key, pdf_bytes, "application/pdf")
-
-    await asyncio.to_thread(progress.init, uid, task_id)
-    return task_id, source_key
 
 
 async def stage_agent_capture(
@@ -96,7 +63,6 @@ async def stage_process(
             progress.update,
             uid,
             task_id,
-            percent=PCT_QUEUED,
             stage="cover",
         )
 
@@ -109,7 +75,7 @@ async def stage_process(
         with timed(task_id, "render cover.png"):
             cover_png = await asyncio.to_thread(cover.render_first_page_png, pdf_bytes)
         await asyncio.to_thread(
-            progress.update, uid, task_id, percent=PCT_COVER, stage="metadata"
+            progress.update, uid, task_id, stage="metadata"
         )
 
         # Final canonical GCS keys keyed by titleId (move out of pending).
@@ -154,7 +120,6 @@ async def stage_process(
             progress.update,
             uid,
             task_id,
-            percent=PCT_PARSING_START,
             stage="parsing",
             title_id=title_id,
             title=meta.title,
@@ -205,27 +170,17 @@ async def stage_process(
             progress.update,
             uid,
             task_id,
-            percent=PCT_PARSING_END,
             stage="vectorizing",
         )
 
-        def _on_embed(frac: float) -> None:
-            pct = PCT_PARSING_END + int(
-                frac * (PCT_VECTORIZING_END - PCT_PARSING_END)
-            )
-            progress.update(uid, task_id, percent=pct, stage="vectorizing")
-
         with timed(task_id, "vectorize"):
-            n_chunks = await vector_index.build(
-                uid, title_id, content_list, on_progress=_on_embed
-            )
+            n_chunks = await vector_index.build(uid, title_id, content_list)
         logger.info("[%s] vector index: %d chunks", task_id, n_chunks)
 
         await asyncio.to_thread(
             progress.update,
             uid,
             task_id,
-            percent=PCT_VECTORIZING_END,
             stage="toc",
         )
 
@@ -249,7 +204,7 @@ async def stage_process(
             )
 
         await asyncio.to_thread(
-            progress.update, uid, task_id, percent=PCT_TOC_END, stage="writing"
+            progress.update, uid, task_id, stage="writing"
         )
 
         with timed(task_id, "firestore write (final, isProcessing=false)"):
@@ -273,7 +228,6 @@ async def stage_process(
             progress.update,
             uid,
             task_id,
-            percent=PCT_DONE,
             stage="done",
             title_id=title_id,
         )

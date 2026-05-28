@@ -14,7 +14,6 @@ export type TitleProgressStage =
 	| "failed";
 
 export type TitleProgressEvent = {
-	percent: number;
 	stage: TitleProgressStage;
 	titleId: string | null;
 	title: string | null;

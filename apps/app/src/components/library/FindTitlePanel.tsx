@@ -460,7 +460,7 @@ export function FindTitlePanel({
 								}
 							}}
 							placeholder="Describe a book you're looking for…"
-							className="min-h-24 w-full flex-1 resize-none bg-transparent p-2 typeface-diatype text-neutral-900 outline-none placeholder:text-sm placeholder:font-light placeholder:text-neutral-500"
+							className="min-h-24 text-base w-full flex-1 resize-none bg-transparent p-2 typeface-diatype text-neutral-900 outline-none placeholder:text-sm placeholder:font-light placeholder:text-neutral-500"
 						/>
 					</div>
 

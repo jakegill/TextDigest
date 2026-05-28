@@ -108,9 +108,9 @@ function prettyHost(url: string): string {
 function actionLabel(a: AgentAction): string {
 	switch (a.kind) {
 		case "browse":
-			return `Browsed ${prettyHost(a.url)}`;
+			return `Browsing ${prettyHost(a.url)}`;
 		case "browser_search":
-			return `Searched "${a.query}"`;
+			return `Searching "${a.query}"`;
 		case "verify":
 			return `Verifying ${prettyHost(a.url)}`;
 		case "search":

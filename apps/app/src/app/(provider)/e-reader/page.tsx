@@ -119,14 +119,15 @@ function estimateItemHeight(item: Item): number {
 		const lines = Math.max(1, Math.ceil(item.md.length / CHARS_PER_LINE));
 		return lines * (HEADING_LINE_PX[level] ?? 32) + BLOCK_MARGIN_PX;
 	}
-	const lines = item.md
-		.split("\n")
-		.reduce((sum, line) => sum + Math.max(1, Math.ceil(line.length / CHARS_PER_LINE)), 0);
+	const lines = item.md.split("\n").reduce((sum, line) => sum + Math.max(1, Math.ceil(line.length / CHARS_PER_LINE)), 0);
 	return lines * LINE_PX + BLOCK_MARGIN_PX;
 }
 
 const estimatePageHeight = (page: Page): number =>
-	Math.max(200, page.reduce((sum, it) => sum + estimateItemHeight(it), 0));
+	Math.max(
+		200,
+		page.reduce((sum, it) => sum + estimateItemHeight(it), 0),
+	);
 
 type MarkdownProps = React.ComponentProps<typeof ReactMarkdown>;
 
@@ -315,9 +316,7 @@ function ReaderShell({ titleId, title }: { titleId: string; title: TitleData }) 
 	const pageCount = typeof title.pageCount === "number" ? title.pageCount : 0;
 
 	const [isLoading, setIsLoading] = useState(true);
-	const [pages, setPages] = useState<(Page | undefined)[]>(() =>
-		Array(pageCount).fill(undefined),
-	);
+	const [pages, setPages] = useState<(Page | undefined)[]>(() => Array(pageCount).fill(undefined));
 	const [pageNumber, setPageNumber] = useState(initialPageNumber);
 	const [tocOpen, setTocOpen] = useState(false);
 
@@ -436,13 +435,15 @@ function ReaderShell({ titleId, title }: { titleId: string; title: TitleData }) 
 
 	return (
 		<div className="relative flex h-svh w-svw flex-col overflow-hidden bg-neutral-50">
-			<nav className="z-50 flex h-16 w-full items-center justify-between border-b border-neutral-200 bg-neutral-50 px-4">
+			<nav className="z-50 flex typeface-arizona h-10 xl:h-16 w-full items-center justify-between border-b border-neutral-200 bg-neutral-50 px-4">
 				<Button onClick={() => router.push("/library")} variant="ghost">
-					<ArrowLeftIcon />
-					Return
+					<ArrowLeftIcon className="size-4 xl:size-6" />
+					<span className="hidden lg:block">Return</span>
 				</Button>
 
-				<h1 className="uppercase typeface-arizona text-neutral-900 truncate max-w-[50%]">{titleName}</h1>
+				<h1 className="uppercase text-sm xl:text-base typeface-arizona text-neutral-900 truncate max-w-[50%]">
+					{titleName}
+				</h1>
 
 				<Button
 					variant="ghost"
@@ -452,8 +453,8 @@ function ReaderShell({ titleId, title }: { titleId: string; title: TitleData }) 
 					}}
 					aria-label="Table of contents"
 				>
-					<ListBulletsIcon />
-					Contents
+					<ListBulletsIcon className="size-4 xl:size-6" />
+					<span className="hidden lg:block">Contents</span>
 				</Button>
 			</nav>
 
@@ -475,6 +476,7 @@ function ReaderShell({ titleId, title }: { titleId: string; title: TitleData }) 
 					>
 						{virtualizer.getVirtualItems().map((virtualItem) => (
 							<div
+								className="py-8"
 								key={virtualItem.key}
 								data-index={virtualItem.index}
 								ref={virtualizer.measureElement}
@@ -520,7 +522,7 @@ function ReaderShell({ titleId, title }: { titleId: string; title: TitleData }) 
 				</div>
 			</main>
 
-			<footer className="flex w-full flex-col items-center justify-center gap-4 px-32 pt-4 pb-4 text-center text-xs typeface-diatype font-medium text-neutral-500">
+			<footer className="flex w-full flex-col items-center justify-center gap-4 px-32 py-1 lg:px-4 text-center text-xs typeface-diatype font-medium text-neutral-500">
 				<p>
 					Page {pageNumber + 1} of {pageCount} •{" "}
 					{pageCount > 0 ? `${Math.round(((pageNumber + 1) / pageCount) * 100)}%` : "0%"}
@@ -559,7 +561,7 @@ function Figure({ src, caption }: { src: string; caption?: string }) {
 			{/* eslint-disable-next-line @next/next/no-img-element */}
 			<img src={src} alt="" className="h-auto max-w-full" />
 			{caption && (
-				<div className="text-center text-sm typeface-diatype text-neutral-800">
+				<div className=" text-sm typeface-diatype text-neutral-800">
 					<ReactMarkdown
 						remarkPlugins={[remarkGfm, remarkMath]}
 						rehypePlugins={[rehypeRaw, rehypeKatex]}

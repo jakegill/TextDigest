@@ -105,10 +105,6 @@ export function QuestionsPanel({
 	const conversationRef = useRef<HTMLDivElement>(null);
 
 	useEffect(() => {
-		if (questions.isOpen) textareaRef.current?.focus();
-	}, [questions.isOpen]);
-
-	useEffect(() => {
 		const el = conversationRef.current;
 		if (el) el.scrollTop = el.scrollHeight;
 	}, [questions.conversation, questions.streamingText, questions.isStreaming]);
@@ -166,7 +162,7 @@ export function QuestionsPanel({
 				</div>
 			</header>
 
-			<main ref={conversationRef} className="flex flex-1 flex-col gap-4 overflow-y-auto px-4 pt-4 pb-3">
+			<main ref={conversationRef} className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 pt-4 pb-3">
 				{questions.conversation.map((m, i) =>
 					m.role === "user" ? (
 						<div

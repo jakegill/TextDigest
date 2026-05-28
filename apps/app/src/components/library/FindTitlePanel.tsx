@@ -325,10 +325,6 @@ export function FindTitlePanel({
 	};
 
 	useEffect(() => {
-		if (findTitle.isOpen) textareaRef.current?.focus();
-	}, [findTitle.isOpen]);
-
-	useEffect(() => {
 		const el = bodyRef.current;
 		if (el) el.scrollTop = el.scrollHeight;
 	}, [findTitle.conversation, findTitle.streamingText, findTitle.streamingCandidates, findTitle.isStreaming]);
@@ -389,7 +385,7 @@ export function FindTitlePanel({
 				</div>
 			</header>
 
-			<main ref={bodyRef} className="flex flex-1 flex-col gap-4 py-4 overflow-y-auto px-4 ">
+			<main ref={bodyRef} className="flex min-h-0 flex-1 flex-col gap-4 py-4 overflow-y-auto px-4 ">
 				{findTitle.conversation.length === 0 && !findTitle.isStreaming && (
 					<p className="m-auto max-w-xs text-center text-sm italic typeface-diatype text-neutral-600">
 						State the title you are looking for, and I&apos;ll find it online to upload

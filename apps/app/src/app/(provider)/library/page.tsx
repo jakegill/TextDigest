@@ -23,7 +23,6 @@ type TitleCard = {
 	author: string;
 	coverUrl: string;
 	isProcessing: boolean;
-	percent?: number;
 	lastViewed?: string;
 };
 
@@ -104,7 +103,6 @@ export default function Page() {
 				p.titleId === e.titleId
 					? {
 							...p,
-							percent: e.percent,
 							isProcessing: e.stage !== "done" && e.stage !== "failed",
 						}
 					: p,
@@ -125,7 +123,7 @@ export default function Page() {
 		.slice(0, 8);
 
 	return (
-		<div className="h-screen w-screen flex justify-center">
+		<div className="h-[100svh] w-[100svw] flex justify-center">
 			<main className="max-w-full px-4 py-8 xl:max-w-3xl xl:py-16 w-full space-y-4 xl:space-y-8">
 				<div className="flex items-center justify-between">
 					<h1 className="text-xl xl:text-3xl underline items-center typeface-arizona flex gap-1">
@@ -248,7 +246,7 @@ function TitleCardView({ title, onDelete }: { title: TitleCard; onDelete: (title
 				/>
 				{title.isProcessing && (
 					<div className="absolute inset-x-0 bottom-0 bg-black/60 text-white text-[10px] typeface-diatype uppercase tracking-wide py-1 text-center pointer-events-none">
-						{typeof title.percent === "number" ? `processing · ${title.percent}%` : "processing"}
+						processing
 					</div>
 				)}
 			</Link>

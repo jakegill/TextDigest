@@ -21,6 +21,16 @@ def _signed_url(key: str, ttl_seconds: int = 3600) -> str:
     )
 
 
+def signed_upload_url(key: str, content_type: str, ttl_seconds: int = 600) -> str:
+    return bucket.blob(key).generate_signed_url(
+        version="v4",
+        expiration=timedelta(seconds=ttl_seconds),
+        method="PUT",
+        content_type=content_type,
+        credentials=signing_credentials,
+    )
+
+
 def _to_metadata(d: dict) -> TitleMetadata:
     return TitleMetadata(
         titleId=d["titleId"],

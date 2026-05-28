@@ -108,9 +108,9 @@ function prettyHost(url: string): string {
 function actionLabel(a: AgentAction): string {
 	switch (a.kind) {
 		case "browse":
-			return `Browsed ${prettyHost(a.url)}`;
+			return `Browsing ${prettyHost(a.url)}`;
 		case "browser_search":
-			return `Searched "${a.query}"`;
+			return `Searching "${a.query}"`;
 		case "verify":
 			return `Verifying ${prettyHost(a.url)}`;
 		case "search":
@@ -460,7 +460,7 @@ export function FindTitlePanel({
 								}
 							}}
 							placeholder="Describe a book you're looking for…"
-							className="min-h-24 w-full flex-1 resize-none bg-transparent p-2 typeface-diatype text-neutral-900 outline-none placeholder:text-sm placeholder:font-light placeholder:text-neutral-500"
+							className="min-h-24 text-base w-full flex-1 resize-none bg-transparent p-2 typeface-diatype text-neutral-900 outline-none placeholder:text-sm placeholder:font-light placeholder:text-neutral-500"
 						/>
 					</div>
 

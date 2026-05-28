@@ -246,7 +246,7 @@ export function QuestionsPanel({
 								}
 							}}
 							placeholder="Ask anything about this book…"
-							className="min-h-24 w-full flex-1 resize-none bg-transparent p-2 text-sm typeface-diatype text-neutral-900 outline-none placeholder:text-sm placeholder:font-light placeholder:text-neutral-500"
+							className="min-h-24 w-full flex-1 resize-none bg-transparent p-2 text-base typeface-diatype text-neutral-900 outline-none placeholder:text-sm placeholder:font-light placeholder:text-neutral-500"
 						/>
 					</div>
 

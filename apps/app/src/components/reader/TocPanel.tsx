@@ -1,6 +1,5 @@
 "use client";
 import { XIcon } from "@phosphor-icons/react";
-import { useEffect, useRef } from "react";
 
 import { Button } from "@/components/ui/button";
 
@@ -26,53 +25,24 @@ const LEVEL_TEXT: Record<number, string> = {
 };
 
 export function TocPanel({
-	isOpen,
 	onClose,
 	entries,
 	onJump,
 }: {
-	isOpen: boolean;
 	onClose: () => void;
 	entries: TocEntry[];
 	onJump: (pdfPage: number) => void;
 }) {
-	const panelRef = useRef<HTMLDivElement>(null);
-
-	useEffect(() => {
-		if (!isOpen) return;
-		let active = false;
-		const raf = requestAnimationFrame(() => {
-			active = true;
-		});
-		const onPointerDown = (e: MouseEvent) => {
-			if (!active) return;
-			const target = e.target as HTMLElement | null;
-			if (!target) return;
-			if (panelRef.current?.contains(target)) return;
-			if (target.closest('[role="menu"],[role="menuitem"],[data-base-ui-popup]')) return;
-			onClose();
-		};
-		document.addEventListener("mousedown", onPointerDown);
-		return () => {
-			cancelAnimationFrame(raf);
-			document.removeEventListener("mousedown", onPointerDown);
-		};
-	}, [isOpen, onClose]);
-
 	return (
-		<div
-			ref={panelRef}
-			data-open={isOpen}
-			className="fixed right-0 top-0 z-60 flex h-svh w-full flex-col border-l border-neutral-200 bg-neutral-50 shadow-xl transition-transform translate-x-full data-[open=true]:translate-x-0 md:w-128"
-		>
-			<div className="flex flex-shrink-0 h-16 items-center justify-between border-b border-neutral-200 px-4 py-3">
+		<div className="flex h-full w-full flex-col">
+			<header className="flex flex-shrink-0 h-16 items-center justify-between border-b border-neutral-200 px-4 py-3">
 				<span className="font-medium typeface-diatype text-neutral-900">Contents</span>
 				<Button variant="ghost" onClick={onClose} aria-label="Close">
 					<XIcon className="size-6" />
 				</Button>
-			</div>
+			</header>
 
-			<div className="flex flex-1 flex-col overflow-y-auto px-4 py-2">
+			<main className="flex flex-1 flex-col overflow-y-auto px-4 py-2">
 				{entries.length === 0 ? (
 					<div className="px-4 py-6 text-sm typeface-diatype text-neutral-500">
 						No table of contents available for this title.
@@ -94,7 +64,7 @@ export function TocPanel({
 						);
 					})
 				)}
-			</div>
+			</main>
 		</div>
 	);
 }

@@ -18,6 +18,7 @@ import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 
 import { Button } from "@/components/ui/button";
+import { SideDrawer } from "@/components/ui/side-drawer";
 import { TextShimmer } from "@/components/ui/text-shimmer";
 import type { UseQuestionsReturn } from "@/hooks/useQuestions";
 
@@ -37,6 +38,24 @@ function formatRelative(iso: string | null): string {
 	return new Date(iso).toLocaleDateString();
 }
 
+function formatElapsed(ms: number): string {
+	const s = Math.round(ms / 1000);
+	if (s < 1) return "<1s";
+	if (s < 60) return `${s}s`;
+	const m = Math.floor(s / 60);
+	const rem = s % 60;
+	return rem ? `${m}m ${rem}s` : `${m}m`;
+}
+
+function ThoughtSignature({ thinkMs }: { thinkMs: number }) {
+	return (
+		<div className="mb-1 flex items-center gap-1.5 text-xs typeface-diatype text-neutral-500">
+			<SparkleIcon size={12} className="shrink-0" />
+			<span>Thought for {formatElapsed(thinkMs)}</span>
+		</div>
+	);
+}
+
 const STARTERS = ["Examples of this", "Explain the highlighted text", "How does this work"];
 
 const MD_REMARK = [remarkGfm, remarkMath];
@@ -46,7 +65,6 @@ function AssistantMarkdown({ text }: { text: string }) {
 	return (
 		<ReactMarkdown
 			remarkPlugins={MD_REMARK}
-			// eslint-disable-next-line @typescript-eslint/no-explicit-any
 			rehypePlugins={MD_REHYPE as any}
 			components={{
 				p: ({ children }) => <p className="my-2 text-sm typeface-arizona text-neutral-800">{children}</p>,
@@ -85,32 +103,10 @@ export function QuestionsPanel({
 	const [message, setMessage] = useState("");
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
 	const conversationRef = useRef<HTMLDivElement>(null);
-	const panelRef = useRef<HTMLDivElement>(null);
 
 	useEffect(() => {
 		if (questions.isOpen) textareaRef.current?.focus();
 	}, [questions.isOpen]);
-
-	useEffect(() => {
-		if (!questions.isOpen) return;
-		let active = false;
-		const raf = requestAnimationFrame(() => {
-			active = true;
-		});
-		const onPointerDown = (e: MouseEvent) => {
-			if (!active) return;
-			const target = e.target as HTMLElement | null;
-			if (!target) return;
-			if (panelRef.current?.contains(target)) return;
-			if (target.closest('[role="menu"],[role="menuitem"],[data-base-ui-popup],[data-selection-bubble]')) return;
-			questions.close();
-		};
-		document.addEventListener("mousedown", onPointerDown);
-		return () => {
-			cancelAnimationFrame(raf);
-			document.removeEventListener("mousedown", onPointerDown);
-		};
-	}, [questions.isOpen, questions.close, questions]);
 
 	useEffect(() => {
 		const el = conversationRef.current;
@@ -127,12 +123,8 @@ export function QuestionsPanel({
 	const showStarters = questions.conversation.length === 0 && !questions.isStreaming && !questions.streamingText;
 
 	return (
-		<div
-			ref={panelRef}
-			data-open={questions.isOpen}
-			className="fixed right-0 top-0 z-60 flex h-svh w-full flex-col border-l border-neutral-200 bg-neutral-50 shadow-xl transition-transform translate-x-full data-[open=true]:translate-x-0 md:w-128"
-		>
-			<div className="flex flex-shrink-0 h-16 items-center justify-between border-b border-neutral-200 px-4 py-3">
+		<div className="flex h-full w-full flex-col">
+			<header className="flex flex-shrink-0 h-16 items-center justify-between border-b border-neutral-200 px-4 py-3">
 				<div className="flex items-center gap-2">
 					<span className=" font-medium typeface-diatype text-neutral-900">Understand</span>
 				</div>
@@ -172,9 +164,9 @@ export function QuestionsPanel({
 						<XIcon className="size-6" />
 					</Button>
 				</div>
-			</div>
+			</header>
 
-			<div ref={conversationRef} className="flex flex-1 flex-col gap-4 overflow-y-auto px-4 pt-4 pb-3">
+			<main ref={conversationRef} className="flex flex-1 flex-col gap-4 overflow-y-auto px-4 pt-4 pb-3">
 				{questions.conversation.map((m, i) =>
 					m.role === "user" ? (
 						<div
@@ -185,6 +177,7 @@ export function QuestionsPanel({
 						</div>
 					) : (
 						<div key={i} className="text-neutral-800">
+							{m.thinkMs !== undefined && <ThoughtSignature thinkMs={m.thinkMs} />}
 							<AssistantMarkdown text={m.content} />
 						</div>
 					),
@@ -192,6 +185,7 @@ export function QuestionsPanel({
 
 				{questions.isStreaming && questions.streamingText && (
 					<div className="text-neutral-800 text-lg">
+						{questions.thinkMs !== undefined && <ThoughtSignature thinkMs={questions.thinkMs} />}
 						<AssistantMarkdown text={questions.streamingText} />
 					</div>
 				)}
@@ -219,74 +213,76 @@ export function QuestionsPanel({
 						))}
 					</div>
 				)}
-			</div>
+			</main>
 
-			<form
-				className="relative flex-shrink-0 p-3"
-				onSubmit={(e) => {
-					e.preventDefault();
-					handleSend(message);
-				}}
-			>
-				<div className="flex min-h-24 w-full flex-col rounded-md border border-neutral-200 bg-neutral-100">
-					{questions.highlightedText && (
-						<div className="max-h-12 overflow-hidden border-b border-neutral-200 p-2 text-xs typeface-diatype text-neutral-600">
-							<span className="line-clamp-2">
-								“
-								{questions.highlightedText.length > 140
-									? questions.highlightedText.slice(0, 140).trimEnd() + "…"
-									: questions.highlightedText}
-								”
-							</span>
-						</div>
-					)}
-					<textarea
-						ref={textareaRef}
-						value={message}
-						onChange={(e) => setMessage(e.target.value)}
-						onKeyDown={(e) => {
-							if (e.key === "Enter" && !e.shiftKey) {
-								e.preventDefault();
-								handleSend(message);
-							}
-						}}
-						placeholder="Ask anything about this book…"
-						className="min-h-24 w-full flex-1 resize-none bg-transparent p-2 text-sm typeface-diatype text-neutral-900 outline-none placeholder:text-sm placeholder:font-light placeholder:text-neutral-500"
-					/>
-				</div>
+			<footer className="flex flex-col">
+				<form
+					className="relative flex-shrink-0 p-3"
+					onSubmit={(e) => {
+						e.preventDefault();
+						handleSend(message);
+					}}
+				>
+					<div className="flex min-h-24 w-full flex-col rounded-md border border-neutral-200 bg-neutral-100">
+						{questions.highlightedText && (
+							<div className="max-h-12 overflow-hidden border-b border-neutral-200 p-2 text-xs typeface-diatype text-neutral-600">
+								<span className="line-clamp-2">
+									“
+									{questions.highlightedText.length > 140
+										? questions.highlightedText.slice(0, 140).trimEnd() + "…"
+										: questions.highlightedText}
+									”
+								</span>
+							</div>
+						)}
+						<textarea
+							ref={textareaRef}
+							value={message}
+							onChange={(e) => setMessage(e.target.value)}
+							onKeyDown={(e) => {
+								if (e.key === "Enter" && !e.shiftKey) {
+									e.preventDefault();
+									handleSend(message);
+								}
+							}}
+							placeholder="Ask anything about this book…"
+							className="min-h-24 w-full flex-1 resize-none bg-transparent p-2 text-sm typeface-diatype text-neutral-900 outline-none placeholder:text-sm placeholder:font-light placeholder:text-neutral-500"
+						/>
+					</div>
 
-				<div className="absolute right-5 bottom-5 left-5 z-10 flex items-center justify-between gap-2">
-					<button
-						type="button"
-						onClick={questions.reset}
-						disabled={questions.isStreaming}
-						className="flex cursor-pointer items-center gap-1 rounded-md border border-neutral-200 bg-neutral-50 px-2 py-1 text-sm typeface-diatype text-neutral-600 transition-colors duration-300 hover:bg-neutral-100 hover:text-neutral-900 active:scale-95 disabled:opacity-50"
-					>
-						<ArrowClockwiseIcon size={16} />
-						Reset
-					</button>
-
-					{questions.isStreaming ? (
+					<div className="absolute right-5 bottom-5 left-5 z-10 flex items-center justify-between gap-2">
 						<button
 							type="button"
-							onClick={questions.stop}
-							className="flex cursor-pointer items-center gap-1 rounded-md bg-neutral-200 px-2 py-1 text-sm typeface-diatype text-neutral-800 transition-colors duration-300 hover:bg-neutral-300 active:scale-95"
+							onClick={questions.reset}
+							disabled={questions.isStreaming}
+							className="flex cursor-pointer items-center gap-1 rounded-md border border-neutral-200 bg-neutral-50 px-2 py-1 text-sm typeface-diatype text-neutral-600 transition-colors duration-300 hover:bg-neutral-100 hover:text-neutral-900 active:scale-95 disabled:opacity-50"
 						>
-							<StopIcon size={16} weight="fill" className="text-neutral-600" />
-							Stop
+							<ArrowClockwiseIcon size={16} />
+							Reset
 						</button>
-					) : (
-						<button
-							type="submit"
-							disabled={!message.trim()}
-							className="flex cursor-pointer items-center gap-1 rounded-md border border-primary-800 bg-primary-600 px-2 py-1 text-sm typeface-diatype text-primary-50 transition-colors duration-300 hover:bg-primary-700 active:scale-95 disabled:cursor-not-allowed disabled:opacity-70"
-						>
-							<ArrowUpIcon size={16} />
-							Send
-						</button>
-					)}
-				</div>
-			</form>
+
+						{questions.isStreaming ? (
+							<button
+								type="button"
+								onClick={questions.stop}
+								className="flex cursor-pointer items-center gap-1 rounded-md bg-neutral-200 px-2 py-1 text-sm typeface-diatype text-neutral-800 transition-colors duration-300 hover:bg-neutral-300 active:scale-95"
+							>
+								<StopIcon size={16} weight="fill" className="text-neutral-600" />
+								Stop
+							</button>
+						) : (
+							<button
+								type="submit"
+								disabled={!message.trim()}
+								className="flex cursor-pointer items-center gap-1 rounded-md border border-primary-800 bg-primary-600 px-2 py-1 text-sm typeface-diatype text-primary-50 transition-colors duration-300 hover:bg-primary-700 active:scale-95 disabled:cursor-not-allowed disabled:opacity-70"
+							>
+								<ArrowUpIcon size={16} />
+								Send
+							</button>
+						)}
+					</div>
+				</form>
+			</footer>
 		</div>
 	);
 }

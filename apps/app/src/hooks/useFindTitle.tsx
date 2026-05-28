@@ -17,11 +17,13 @@ import { v4 as uuid } from "uuid";
 
 export type FindTitleContext = { library: LibraryItem[] };
 
+export type TimedAction = { action: AgentAction; startedAt: number; durationMs?: number };
+
 export type FindTitleTurn = {
 	role: "user" | "assistant";
 	content: string;
 	candidates?: TitleCandidate[];
-	actions?: AgentAction[];
+	actions?: TimedAction[];
 };
 
 function stripSentinel(text: string): string {
@@ -34,7 +36,7 @@ export function useFindTitle() {
 	const [conversation, setConversation] = useState<FindTitleTurn[]>([]);
 	const [streamingText, setStreamingText] = useState("");
 	const [streamingCandidates, setStreamingCandidates] = useState<TitleCandidate[]>([]);
-	const [actions, setActions] = useState<AgentAction[]>([]);
+	const [actions, setActions] = useState<TimedAction[]>([]);
 	const [isStreaming, setIsStreaming] = useState(false);
 	const [activeSubagent, setActiveSubagent] = useState<SubagentName | null>(null);
 	const [currentTitle, setCurrentTitle] = useState("");
@@ -90,7 +92,7 @@ export function useFindTitle() {
 				role: m.role,
 				content: m.content,
 				candidates: m.candidates,
-				actions: m.actions,
+				actions: m.actions?.map((a) => ({ action: a, startedAt: 0 })),
 			})),
 		);
 		setConversationId(doc.conversationId);
@@ -126,9 +128,15 @@ export function useFindTitle() {
 
 			let textAcc = "";
 			let candAcc: TitleCandidate[] = [];
-			const actionsAcc: AgentAction[] = [];
+			const actionsAcc: TimedAction[] = [];
+			const finalizeLast = (now: number) => {
+				const last = actionsAcc[actionsAcc.length - 1];
+				if (last && last.durationMs === undefined) last.durationMs = Math.max(0, now - last.startedAt);
+			};
 			const pushAction = (a: AgentAction) => {
-				actionsAcc.push(a);
+				const now = Date.now();
+				finalizeLast(now);
+				actionsAcc.push({ action: a, startedAt: now });
 				setActions([...actionsAcc]);
 			};
 			try {
@@ -162,17 +170,20 @@ export function useFindTitle() {
 								pushAction({ kind: "browser_search", query: args.query });
 							}
 						} else if (e.event === "candidates") {
+							finalizeLast(Date.now());
 							candAcc = e.body;
 							setStreamingCandidates(candAcc);
 							setActiveSubagent(null);
+							setActions([...actionsAcc]);
 						} else if (e.event === "done") {
+							finalizeLast(Date.now());
 							setConversation((c) => [
 								...c,
 								{
 									role: "assistant",
 									content: stripSentinel(textAcc),
 									candidates: candAcc,
-									actions: actionsAcc.length ? [...actionsAcc] : undefined,
+									actions: actionsAcc.length ? actionsAcc.map((t) => ({ ...t })) : undefined,
 								},
 							]);
 							setStreamingText("");

@@ -15,12 +15,15 @@ export type QuestionsContext = {
 	pageContent: string;
 };
 
+type QTurn = QuestionTurn & { thinkMs?: number };
+
 export function useQuestions() {
 	const [isOpen, setIsOpen] = useState(false);
 	const [conversationId, setConversationId] = useState(() => uuid());
-	const [conversation, setConversation] = useState<QuestionTurn[]>([]);
+	const [conversation, setConversation] = useState<QTurn[]>([]);
 	const [highlightedText, setHighlightedText] = useState("");
 	const [streamingText, setStreamingText] = useState("");
+	const [thinkMs, setThinkMs] = useState<number | undefined>(undefined);
 	const [isStreaming, setIsStreaming] = useState(false);
 	const [currentTitle, setCurrentTitle] = useState("");
 	const [history, setHistory] = useState<ConversationSummary[]>([]);
@@ -50,6 +53,7 @@ export function useQuestions() {
 		abortRef.current = null;
 		setIsStreaming(false);
 		setStreamingText("");
+		setThinkMs(undefined);
 		setConversation([]);
 		setCurrentTitle("");
 		setConversationId(uuid());
@@ -83,7 +87,10 @@ export function useQuestions() {
 			const historyAtSend = conversation;
 			setConversation((c) => [...c, { role: "user", content: trimmed }]);
 			setStreamingText("");
+			setThinkMs(undefined);
 			setIsStreaming(true);
+			const thinkStartedAt = Date.now();
+			let firstChunkAt: number | null = null;
 
 			if (!initializedIdsRef.current.has(conversationId)) {
 				initializedIdsRef.current.add(conversationId);
@@ -115,11 +122,17 @@ export function useQuestions() {
 					},
 					(e) => {
 						if (e.event === "chunk") {
+							if (firstChunkAt === null) {
+								firstChunkAt = Date.now();
+								setThinkMs(firstChunkAt - thinkStartedAt);
+							}
 							acc += e.body;
 							setStreamingText(acc);
 						} else if (e.event === "turn-over") {
-							setConversation((c) => [...c, { role: "assistant", content: acc }]);
+							const finalThinkMs = (firstChunkAt ?? Date.now()) - thinkStartedAt;
+							setConversation((c) => [...c, { role: "assistant", content: acc, thinkMs: finalThinkMs }]);
 							setStreamingText("");
+							setThinkMs(undefined);
 							setIsStreaming(false);
 							putConversation(conversationId);
 						} else if (e.event === "error") {
@@ -143,6 +156,7 @@ export function useQuestions() {
 		conversation,
 		highlightedText,
 		streamingText,
+		thinkMs,
 		isStreaming,
 		currentTitle,
 		history,

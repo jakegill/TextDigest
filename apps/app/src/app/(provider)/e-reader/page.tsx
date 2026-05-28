@@ -16,6 +16,7 @@ import { QuestionsPanel } from "@/components/reader/QuestionsPanel";
 import { SelectionBubble } from "@/components/reader/SelectionBubble";
 import { TocPanel, type TocEntry } from "@/components/reader/TocPanel";
 import { Button } from "@/components/ui/button";
+import { SideDrawer } from "@/components/ui/side-drawer";
 import { type Bbox, DEFAULT_BBOX, isCentered, unionBbox } from "@/hooks/useBbox";
 import { useQuestions } from "@/hooks/useQuestions";
 import { getContentList } from "@/services/api/getContentList";
@@ -526,25 +527,28 @@ function ReaderShell({ titleId, title }: { titleId: string; title: TitleData }) 
 				</p>
 			</footer>
 
-			<QuestionsPanel
-				questions={questions}
-				titleId={titleId}
-				title={titleName}
-				author={titleAuthor}
-				pageContent={(pages[pageNumber] ?? []).map((i) => i.md).join("\n\n")}
-			/>
+			<SideDrawer isOpen={questions.isOpen} onClose={questions.close} className="md:w-128">
+				<QuestionsPanel
+					questions={questions}
+					titleId={titleId}
+					title={titleName}
+					author={titleAuthor}
+					pageContent={(pages[pageNumber] ?? []).map((i) => i.md).join("\n\n")}
+				/>
+			</SideDrawer>
 
-			<TocPanel
-				isOpen={tocOpen}
-				onClose={() => setTocOpen(false)}
-				entries={toc}
-				onJump={(pdfPage) => {
-					const idx = Math.max(0, Math.min(pageCount - 1, pdfPage - 1));
-					virtualizer.scrollToIndex(idx, { align: "start" });
-					setPageNumber(idx);
-					setTocOpen(false);
-				}}
-			/>
+			<SideDrawer isOpen={tocOpen} onClose={() => setTocOpen(false)} className="md:w-128">
+				<TocPanel
+					onClose={() => setTocOpen(false)}
+					entries={toc}
+					onJump={(pdfPage) => {
+						const idx = Math.max(0, Math.min(pageCount - 1, pdfPage - 1));
+						virtualizer.scrollToIndex(idx, { align: "start" });
+						setPageNumber(idx);
+						setTocOpen(false);
+					}}
+				/>
+			</SideDrawer>
 		</div>
 	);
 }

@@ -100,6 +100,10 @@ export const apiService = new gcp.cloudrunv2.Service("api", {
 	deletionProtection: isProtectedStage,
 	template: {
 		serviceAccount: apiSa.email,
+		// Default 300s would 504 the /titles/process worker (3-10+ min
+		// pipeline) and kill SSE streams at 5 min. Matches the Cloud Tasks
+		// dispatch deadline.
+		timeout: "1800s",
 		containers: [
 			{
 				image: apiImageRef,

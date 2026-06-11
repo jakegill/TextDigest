@@ -23,6 +23,7 @@ type TitleCard = {
 	author: string;
 	coverUrl: string;
 	isProcessing: boolean;
+	processingError?: string | null;
 	lastViewed?: string;
 };
 
@@ -45,6 +46,7 @@ export default function Page() {
 						author: r.author,
 						coverUrl: r.coverUrl,
 						isProcessing: r.isProcessing,
+						processingError: r.processingError ?? null,
 						lastViewed: r.lastViewed,
 					})),
 				);
@@ -65,7 +67,14 @@ export default function Page() {
 				processing.map((t) =>
 					getTitleById(t.titleId).then(
 						(d) =>
-							d ? { titleId: t.titleId, isProcessing: !!d.isProcessing, coverUrl: d.coverUrl as string } : null,
+							d
+								? {
+										titleId: t.titleId,
+										isProcessing: !!d.isProcessing,
+										coverUrl: d.coverUrl as string,
+										processingError: (d.processingError as string | null) ?? null,
+									}
+								: null,
 						() => null,
 					),
 				),
@@ -74,7 +83,12 @@ export default function Page() {
 				prev.map((p) => {
 					const hit = results.find((r) => r && r.titleId === p.titleId);
 					if (!hit) return p;
-					return { ...p, isProcessing: hit.isProcessing, coverUrl: hit.coverUrl || p.coverUrl };
+					return {
+						...p,
+						isProcessing: hit.isProcessing,
+						coverUrl: hit.coverUrl || p.coverUrl,
+						processingError: hit.processingError,
+					};
 				}),
 			);
 		};
@@ -91,6 +105,7 @@ export default function Page() {
 				author: t.author,
 				coverUrl: t.coverUrl,
 				isProcessing: t.isProcessing,
+				processingError: t.processingError ?? null,
 			},
 			...prev.filter((p) => p.titleId !== t.titleId),
 		]);
@@ -104,6 +119,7 @@ export default function Page() {
 					? {
 							...p,
 							isProcessing: e.stage !== "done" && e.stage !== "failed",
+							processingError: e.stage === "failed" ? (e.error ?? "Processing failed") : p.processingError,
 						}
 					: p,
 			),
@@ -220,21 +236,29 @@ export default function Page() {
 }
 
 function TitleCardView({ title, onDelete }: { title: TitleCard; onDelete: (titleId: string) => void }) {
-	const blockIfProcessing = (e: React.MouseEvent) => {
+	const failed = !title.isProcessing && !!title.processingError;
+	const blockIfUnready = (e: React.MouseEvent) => {
+		if (failed) {
+			e.preventDefault();
+			toast.error("Processing failed", {
+				description: title.processingError ?? undefined,
+			});
+			return;
+		}
 		if (!title.isProcessing) return;
 		e.preventDefault();
 		toast.warning("Still processing", {
 			description: "Processing takes ~3-10 minutes, depending on how large the content is.",
 		});
 	};
-	const linkClass = title.isProcessing ? "cursor-not-allowed" : "cursor-pointer";
+	const linkClass = title.isProcessing || failed ? "cursor-not-allowed" : "cursor-pointer";
 
 	return (
 		<li className="flex flex-col gap-2">
 			<Link
 				href={`/e-reader?titleId=${title.titleId}`}
-				aria-disabled={title.isProcessing}
-				onClick={blockIfProcessing}
+				aria-disabled={title.isProcessing || failed}
+				onClick={blockIfUnready}
 				className={`${linkClass} relative aspect-3/4 bg-neutral-100 overflow-hidden block`}
 			>
 				<Image
@@ -249,12 +273,17 @@ function TitleCardView({ title, onDelete }: { title: TitleCard; onDelete: (title
 						processing
 					</div>
 				)}
+				{failed && (
+					<div className="absolute inset-x-0 bottom-0 bg-accent-red-800/80 text-white text-[10px] typeface-diatype uppercase tracking-wide py-1 text-center pointer-events-none">
+						failed
+					</div>
+				)}
 			</Link>
 			<div className="relative group flex flex-col gap-1">
 				<Link
 					href={`/e-reader?titleId=${title.titleId}`}
-					aria-disabled={title.isProcessing}
-					onClick={blockIfProcessing}
+					aria-disabled={title.isProcessing || failed}
+					onClick={blockIfUnready}
 					className={`flex flex-col gap-1 ${linkClass}`}
 				>
 					<p className="text-sm typeface-diatype text-neutral-800 line-clamp-2 capitalize">{title.title}</p>

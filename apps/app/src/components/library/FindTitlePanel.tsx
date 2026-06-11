@@ -19,6 +19,7 @@ import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { SideDrawer } from "@/components/ui/side-drawer";
@@ -314,6 +315,13 @@ export function FindTitlePanel({
 						author: e.author,
 						coverUrl: e.coverUrl,
 						isProcessing: e.stage !== "done" && e.stage !== "failed",
+						processingError: e.stage === "failed" ? e.error : null,
+					});
+				}
+				if (e.stage === "failed") {
+					setIngestStates((s) => ({ ...s, [tid]: "error" }));
+					toast.error("Processing failed", {
+						description: e.error ?? "Something went wrong processing the PDF.",
 					});
 				}
 				if (e.stage === "done" || e.stage === "failed") ac.abort();

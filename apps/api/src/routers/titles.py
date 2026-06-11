@@ -184,9 +184,21 @@ async def processing_events(
 
 @router.post("/process", include_in_schema=False)
 async def process(
+    request: Request,
     body: _ProcessRequest,
     _: Annotated[None, Depends(verify_cloud_task_oidc)],
 ) -> dict[str, str]:
     """Worker endpoint. Authed via Cloud Tasks OIDC token (not Firebase)."""
-    await flows.stage_process(body.uid, body.taskId, body.sourceKey, body.filename)
+    # X-CloudTasks-TaskRetryCount counts prior attempts; the queue allows 3
+    # total (infra/queue.ts maxAttempts). Absent header (dev in-process mode)
+    # means no retries are coming, so failures must mark the title failed now.
+    retry_count = request.headers.get("X-CloudTasks-TaskRetryCount")
+    is_final_attempt = retry_count is None or int(retry_count) + 1 >= 3
+    await flows.stage_process(
+        body.uid,
+        body.taskId,
+        body.sourceKey,
+        body.filename,
+        is_final_attempt=is_final_attempt,
+    )
     return {"ok": "true"}

@@ -82,6 +82,7 @@ async def stage_process(
         final_source_key = f"users/{uid}/titles/{title_id}/source.pdf"
         cover_key = f"users/{uid}/titles/{title_id}/cover.png"
         parsed_md_key = f"users/{uid}/titles/{title_id}/parsed.md"
+        content_list_key = f"users/{uid}/titles/{title_id}/content_list.json"
         pages_prefix = f"users/{uid}/titles/{title_id}/pages"
         toc_key = f"users/{uid}/titles/{title_id}/toc.json"
         images_prefix = f"users/{uid}/titles/{title_id}/images"
@@ -128,17 +129,14 @@ async def stage_process(
         )
 
         with timed(task_id, "mineru parse"):
-            parse_result = await mineru.parse_pdf(
-                title_id, pdf_bytes, images_prefix
+            content_list = await mineru.parse_pdf(
+                title_id,
+                final_source_key,
+                images_prefix,
+                parsed_md_key,
+                content_list_key,
             )
-        parsed = parse_result.markdown
-        content_list = parse_result.content_list
-        logger.info(
-            "[%s] parsed: %d chars; preview: %s...",
-            task_id,
-            len(parsed),
-            parsed[:300],
-        )
+        logger.info("[%s] parsed: %d blocks", task_id, len(content_list))
 
         page_count = (
             max((b.get("page_idx", 0) for b in content_list), default=-1) + 1
@@ -147,13 +145,7 @@ async def stage_process(
         for b in content_list:
             pages_by_idx.setdefault(b.get("page_idx", 0), []).append(b)
 
-        with timed(
-            task_id,
-            f"upload parsed.md + {page_count} page shards",
-        ):
-            await asyncio.to_thread(
-                _upload, parsed_md_key, parsed.encode("utf-8"), "text/markdown"
-            )
+        with timed(task_id, f"upload {page_count} page shards"):
             await asyncio.gather(
                 *(
                     asyncio.to_thread(

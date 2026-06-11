@@ -1,15 +1,16 @@
 import asyncio
-import json
 import logging
 import os
 import tempfile
 from pathlib import Path
 
 import google.auth
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, HTTPException
+from google.api_core.exceptions import NotFound
 from google.auth.transport.requests import Request as GoogleRequest
 from google.cloud import storage
 from google.cloud.storage import transfer_manager
+from pydantic import BaseModel
 from mineru.backend.hybrid import hybrid_model_output_to_middle_json as _h
 from mineru.cli.common import do_parse
 
@@ -57,20 +58,35 @@ def health() -> dict:
     return {"ok": True}
 
 
-@app.post("/parse")
-async def parse(
-    pdf: UploadFile = File(...),
-    title_id: str = Form(...),
-    images_prefix: str = Form(...),
-    lang: str = Form("en"),
-) -> dict:
-    """Parse a PDF and stream extracted images to GCS.
+class ParseRequest(BaseModel):
+    source_key: str
+    title_id: str
+    images_prefix: str
+    parsed_md_key: str
+    content_list_key: str
+    lang: str = "en"
 
-    `images_prefix` is the GCS key prefix (no leading slash, no trailing slash)
-    where the api wants images deposited — the caller owns the storage layout,
-    not us. Final paths are `gs://${DATA_BUCKET}/${images_prefix}/${filename}`.
+
+@app.post("/parse")
+async def parse(body: ParseRequest) -> dict:
+    """Parse a PDF and stream all outputs to GCS.
+
+    The request and response carry only GCS keys — Cloud Run caps HTTP/1
+    bodies at 32 MiB in both directions, so the PDF, markdown, and content
+    list all move through the shared data bucket. `images_prefix` is the key
+    prefix (no leading/trailing slash) where the api wants images deposited —
+    the caller owns the storage layout, not us.
     """
-    pdf_bytes = await pdf.read()
+    title_id = body.title_id
+    bucket = gcs_client.bucket(DATA_BUCKET)
+    try:
+        pdf_bytes = await asyncio.to_thread(
+            bucket.blob(body.source_key).download_as_bytes
+        )
+    except NotFound:
+        raise HTTPException(
+            status_code=400, detail=f"source blob not found: {body.source_key}"
+        )
     if not pdf_bytes:
         raise HTTPException(status_code=400, detail="empty pdf")
 
@@ -81,7 +97,7 @@ async def parse(
             output_dir=tmp,
             pdf_file_names=[title_id],
             pdf_bytes_list=[pdf_bytes],
-            p_lang_list=[lang],
+            p_lang_list=[body.lang],
             backend="hybrid-auto-engine",
         )
         root = Path(tmp) / title_id
@@ -91,7 +107,7 @@ async def parse(
             raise HTTPException(
                 status_code=500, detail=f"mineru wrote no {title_id}.md"
             )
-        markdown = md_files[0].read_text(encoding="utf-8")
+        markdown_bytes = md_files[0].read_bytes()
 
         cl_files = list(root.rglob(f"{title_id}_content_list.json"))
         if not cl_files:
@@ -99,11 +115,23 @@ async def parse(
                 status_code=500,
                 detail=f"mineru wrote no {title_id}_content_list.json",
             )
-        content_list = json.loads(cl_files[0].read_text(encoding="utf-8"))
+        content_list_bytes = cl_files[0].read_bytes()
+
+        await asyncio.gather(
+            asyncio.to_thread(
+                bucket.blob(body.parsed_md_key).upload_from_string,
+                markdown_bytes,
+                content_type="text/markdown",
+            ),
+            asyncio.to_thread(
+                bucket.blob(body.content_list_key).upload_from_string,
+                content_list_bytes,
+                content_type="application/json",
+            ),
+        )
 
         images_dir = next(root.rglob("images"), None)
         if images_dir and images_dir.is_dir():
-            bucket = gcs_client.bucket(DATA_BUCKET)
             filenames = [p.name for p in images_dir.iterdir() if p.is_file()]
             if filenames:
                 await asyncio.to_thread(
@@ -111,11 +139,16 @@ async def parse(
                     bucket,
                     filenames,
                     source_directory=str(images_dir),
-                    blob_name_prefix=f"{images_prefix}/",
+                    blob_name_prefix=f"{body.images_prefix}/",
                     worker_type=transfer_manager.THREAD,
                     max_workers=16,
                     raise_exception=True,
                 )
-                logger.info("uploaded %d images to %s", len(filenames), images_prefix)
+                logger.info(
+                    "uploaded %d images to %s", len(filenames), body.images_prefix
+                )
 
-    return {"markdown": markdown, "content_list": content_list}
+    return {
+        "markdownBytes": len(markdown_bytes),
+        "contentListBytes": len(content_list_bytes),
+    }

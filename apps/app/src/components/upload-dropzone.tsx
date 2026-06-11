@@ -16,6 +16,7 @@ export type UploadedTitle = {
 	author: string;
 	coverUrl: string;
 	isProcessing: boolean;
+	processingError?: string | null;
 };
 
 export function UploadDropzone({
@@ -44,6 +45,9 @@ export function UploadDropzone({
 			const res = await postTitle(file);
 			if (!res?.taskId) {
 				setIsLoading(false);
+				toast.error("Upload failed", {
+					description: "Something went wrong uploading the PDF. Please try again.",
+				});
 				return;
 			}
 
@@ -68,6 +72,7 @@ export function UploadDropzone({
 							author: e.author,
 							coverUrl: e.coverUrl,
 							isProcessing: e.stage !== "done" && e.stage !== "failed",
+							processingError: e.stage === "failed" ? e.error : null,
 						});
 						setOpen(false);
 						setIsLoading(false);
@@ -82,6 +87,10 @@ export function UploadDropzone({
 						});
 						ac.abort();
 					} else if (e.stage === "failed") {
+						setIsLoading(false);
+						toast.error("Processing failed", {
+							description: e.error ?? "Something went wrong processing the PDF.",
+						});
 						ac.abort();
 					}
 				},

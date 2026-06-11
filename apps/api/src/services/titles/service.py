@@ -71,8 +71,13 @@ def list_for_user(uid: str) -> list[TitleMetadata]:
         .collection("titles")
         .order_by("createdAt", direction=Query.DESCENDING)
     )
+    # Legacy stub docs (failure writes from before update() guarded them)
+    # lack the core fields; skip rather than 500 the whole list.
     return [
-        _to_metadata({**doc.to_dict(), "titleId": doc.id}) for doc in coll.stream()
+        _to_metadata({**d, "titleId": doc.id})
+        for doc in coll.stream()
+        if (d := doc.to_dict() or {})
+        and all(k in d for k in ("title", "coverKey", "createdAt"))
     ]
 
 
@@ -175,5 +180,12 @@ def delete_for_user(uid: str, title_id: str) -> None:
     )
     vector_index.delete(uid, title_id)
     ref.delete()
-    for blob in bucket.list_blobs(prefix=f"users/{uid}/titles/{title_id}/"):
-        blob.delete()
+    # title_id == task_id, so the pending/agent-staged prefixes (which survive
+    # failed runs to keep retries possible) are addressable here too.
+    for prefix in (
+        f"users/{uid}/titles/{title_id}/",
+        f"users/{uid}/pending/{title_id}/",
+        f"users/{uid}/agent-staged/{title_id}/",
+    ):
+        for blob in bucket.list_blobs(prefix=prefix):
+            blob.delete()

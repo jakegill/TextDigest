@@ -6,12 +6,27 @@ import uuid
 from contextlib import contextmanager
 from typing import Iterator
 
+import httpx
+from google.api_core import exceptions as gcp_exceptions
 from google.cloud.firestore import SERVER_TIMESTAMP
+from google.genai import errors as genai_errors
 
 from ...dependencies import bucket, firestore_client
 from . import cover, mineru, progress, service, toc, vector_index
 
 logger = logging.getLogger("uvicorn.error")
+
+_RETRYABLE_STATUS = {408, 429, 500, 502, 503, 504}
+
+
+def _is_retryable(exc: Exception) -> bool:
+    if isinstance(exc, httpx.TransportError):
+        return True
+    if isinstance(exc, httpx.HTTPStatusError):
+        return exc.response.status_code in _RETRYABLE_STATUS
+    if isinstance(exc, (genai_errors.APIError, gcp_exceptions.GoogleAPICallError)):
+        return exc.code in _RETRYABLE_STATUS
+    return isinstance(exc, gcp_exceptions.RetryError)
 
 @contextmanager
 def timed(task_id: str, step: str) -> Iterator[None]:
@@ -49,14 +64,35 @@ async def stage_agent_capture(
 
 
 async def stage_process(
-    uid: str, task_id: str, source_key: str, filename: str | None
+    uid: str,
+    task_id: str,
+    source_key: str,
+    filename: str | None,
+    is_final_attempt: bool = True,
 ) -> None:
     """Worker entrypoint. Drives the full pipeline with progressive Firestore
     progress writes. Writes the title doc after cover metadata is extracted
-    (isProcessing=true), flips it to isProcessing=false on completion."""
-    title_id = str(uuid.uuid4())
+    (isProcessing=true), flips it to isProcessing=false on completion.
+
+    title_id == task_id so Cloud Tasks redeliveries are idempotent: a retry
+    reuses the same title doc and GCS layout instead of minting a duplicate.
+    Transient failures re-raise (Cloud Tasks retries per the queue policy)
+    unless this is the final attempt; deterministic failures mark the title
+    failed and return so they are never retried."""
+    title_id = task_id
     start = time.perf_counter()
     logger.info("[%s] stage_process start (filename=%r)", task_id, filename)
+
+    snap = await asyncio.to_thread(_title_ref(uid, title_id).get)
+    if snap.exists:
+        d = snap.to_dict() or {}
+        if not d.get("isProcessing") and not d.get("processingError"):
+            logger.info("[%s] already completed; skipping duplicate dispatch", task_id)
+            await asyncio.to_thread(
+                progress.update, uid, task_id, stage="done", title_id=title_id
+            )
+            asyncio.create_task(progress.delete_after_delay(uid, task_id))
+            return
 
     try:
         await asyncio.to_thread(
@@ -224,6 +260,13 @@ async def stage_process(
             title_id=title_id,
         )
 
+        # Pending blob is deleted only on success so retries can re-download.
+        try:
+            await asyncio.to_thread(bucket.blob(source_key).delete)
+        except Exception:
+            pass
+        asyncio.create_task(progress.delete_after_delay(uid, task_id))
+
         total = time.perf_counter() - start
         logger.info(
             "[%s] /process total: %.2fs (title=%r, author=%r, toc=%d, chunks=%d)",
@@ -236,6 +279,16 @@ async def stage_process(
         )
 
     except Exception as exc:
+        if _is_retryable(exc) and not is_final_attempt:
+            # Leave the title doc and progress doc untouched — the card keeps
+            # its processing badge and the open SSE stream picks the retry
+            # back up. Re-raise so Cloud Tasks redelivers.
+            logger.warning(
+                "[%s] transient failure, retrying via Cloud Tasks: %s",
+                task_id,
+                exc,
+            )
+            raise
         logger.exception("[%s] processing failed", task_id)
         await asyncio.to_thread(progress.fail, uid, task_id, str(exc))
         # If the title doc was already written, mark it failed too.
@@ -249,17 +302,16 @@ async def stage_process(
             )
         except Exception:
             pass
-        # Re-raise so Cloud Tasks can retry per the queue's retry policy.
-        raise
-    finally:
-        # Best-effort cleanup of the pending blob.
-        try:
-            await asyncio.to_thread(bucket.blob(source_key).delete)
-        except Exception:
-            pass
-        # Schedule deletion of the progress doc 10s after terminal state so
-        # the SSE client has a chance to receive the final event.
         asyncio.create_task(progress.delete_after_delay(uid, task_id))
+
+
+def _title_ref(uid: str, title_id: str):
+    return (
+        firestore_client.collection("users")
+        .document(uid)
+        .collection("titles")
+        .document(title_id)
+    )
 
 
 def _write_title_doc(
@@ -269,13 +321,10 @@ def _write_title_doc(
     fields: dict,
     merge: bool,
 ) -> None:
-    ref = (
-        firestore_client.collection("users")
-        .document(uid)
-        .collection("titles")
-        .document(title_id)
-    )
+    ref = _title_ref(uid, title_id)
     if merge:
-        ref.set(fields, merge=True)
+        # update() raises NotFound on a missing doc, unlike set(merge=True)
+        # which would resurrect a deleted title or create a partial stub.
+        ref.update(fields)
     else:
         ref.set(fields)

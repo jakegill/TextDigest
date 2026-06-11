@@ -3,6 +3,7 @@ import json
 import logging
 
 from google.cloud import tasks_v2
+from google.protobuf import duration_pb2
 
 from ...dependencies import (
     API_SA_EMAIL,
@@ -61,6 +62,11 @@ async def enqueue_process(
                     audience=process_url,
                 ),
             ),
+            # Default dispatch deadline is 600s; the pipeline runs 3-10+ min,
+            # so without this Cloud Tasks redispatches attempts that are still
+            # running. 1800s is the Cloud Tasks maximum and the hard ceiling
+            # for total pipeline time.
+            dispatch_deadline=duration_pb2.Duration(seconds=1800),
         )
         await asyncio.to_thread(
             _client.create_task, parent=_queue_path, task=task

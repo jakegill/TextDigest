@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
 
+import { readerFontVariables } from "@/lib/fonts";
+
 const arizona = localFont({
 	src: "../../public/typefaces/ABC Arizona/ABC Arizona Superfamily Variable/ABCArizonaSuperfamilyVariable-Trial.woff",
 	variable: "--font-arizona",
@@ -27,7 +29,7 @@ export default function RootLayout({
 	children: React.ReactNode;
 }>) {
 	return (
-		<html lang="en" className={`${arizona.variable} ${diatype.variable} h-full antialiased`}>
+		<html lang="en" className={`${arizona.variable} ${diatype.variable} ${readerFontVariables} h-full antialiased`}>
 			<body className="min-h-full flex flex-col">{children}</body>
 		</html>
 	);

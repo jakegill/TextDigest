@@ -1,8 +1,8 @@
 "use client";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { ArrowLeftIcon, CircleNotchIcon, ListBulletsIcon } from "@phosphor-icons/react";
+import { ArrowLeftIcon, CircleNotchIcon, GearSixIcon, ListBulletsIcon } from "@phosphor-icons/react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import rehypeAutolinkHeadings from "rehype-autolink-headings";
 import rehypeHighlight from "rehype-highlight";
@@ -12,13 +12,16 @@ import rehypeSlug from "rehype-slug";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 
+import { PreferencesPanel } from "@/components/reader/PreferencesPanel";
 import { QuestionsPanel } from "@/components/reader/QuestionsPanel";
 import { SelectionBubble } from "@/components/reader/SelectionBubble";
+import { SpeedReaderOverlay } from "@/components/reader/SpeedReaderOverlay";
 import { TocPanel, type TocEntry } from "@/components/reader/TocPanel";
 import { Button } from "@/components/ui/button";
 import { SideDrawer } from "@/components/ui/side-drawer";
 import { type Bbox, DEFAULT_BBOX, isCentered, unionBbox } from "@/hooks/useBbox";
 import { useQuestions } from "@/hooks/useQuestions";
+import { TYPEFACE_OPTIONS, usePreferences, type Preferences } from "@/hooks/usePreferences";
 import { getContentList } from "@/services/api/getContentList";
 import { getTitleById } from "@/services/api/getTitleById";
 import { putTitle } from "@/services/api/putTitle";
@@ -104,31 +107,6 @@ function groupBlocksByPage(blocks: ContentBlock[]): Map<number, ContentBlock[]> 
 	return map;
 }
 
-const CHARS_PER_LINE = 60;
-const LINE_PX = 28;
-const BLOCK_MARGIN_PX = 16;
-const IMAGE_RESERVE_PX = 600;
-const HEADING_LINE_PX: Record<number, number> = { 1: 56, 2: 48, 3: 40, 4: 36 };
-const HEADING_REGEX = /^(#{1,4})\s/;
-
-function estimateItemHeight(item: Item): number {
-	if (item.md.startsWith("![")) return IMAGE_RESERVE_PX + BLOCK_MARGIN_PX;
-	const headingMatch = item.md.match(HEADING_REGEX);
-	if (headingMatch) {
-		const level = headingMatch[1].length;
-		const lines = Math.max(1, Math.ceil(item.md.length / CHARS_PER_LINE));
-		return lines * (HEADING_LINE_PX[level] ?? 32) + BLOCK_MARGIN_PX;
-	}
-	const lines = item.md.split("\n").reduce((sum, line) => sum + Math.max(1, Math.ceil(line.length / CHARS_PER_LINE)), 0);
-	return lines * LINE_PX + BLOCK_MARGIN_PX;
-}
-
-const estimatePageHeight = (page: Page): number =>
-	Math.max(
-		200,
-		page.reduce((sum, it) => sum + estimateItemHeight(it), 0),
-	);
-
 type MarkdownProps = React.ComponentProps<typeof ReactMarkdown>;
 
 const MARKDOWN_REMARK_PLUGINS: MarkdownProps["remarkPlugins"] = [remarkGfm, remarkMath];
@@ -142,22 +120,30 @@ const MARKDOWN_REHYPE_PLUGINS: MarkdownProps["rehypePlugins"] = [
 
 const MARKDOWN_COMPONENTS = {
 	h1: ({ children }: { children?: React.ReactNode }) => (
-		<h1 className="mb-2 break-inside-avoid text-2xl font-semibold typeface-arizona text-neutral-900">{children}</h1>
+		<h1 className="mb-2 break-inside-avoid text-[1.3333em] leading-[1.3333] font-semibold typeface-reader text-neutral-900">
+			{children}
+		</h1>
 	),
 	h2: ({ children }: { children?: React.ReactNode }) => (
-		<h2 className="mb-2 break-inside-avoid text-xl font-semibold typeface-arizona text-neutral-900">{children}</h2>
+		<h2 className="mb-2 break-inside-avoid text-[1.1111em] leading-[1.4] font-semibold typeface-reader text-neutral-900">
+			{children}
+		</h2>
 	),
 	h3: ({ children }: { children?: React.ReactNode }) => (
-		<h3 className="mb-2 break-inside-avoid text-lg font-semibold typeface-arizona text-neutral-900">{children}</h3>
+		<h3 className="mb-2 break-inside-avoid text-[1em] leading-[1.5556] font-semibold typeface-reader text-neutral-900">
+			{children}
+		</h3>
 	),
 	h4: ({ children }: { children?: React.ReactNode }) => (
-		<h4 className="mb-2 break-inside-avoid text-base font-semibold typeface-arizona text-neutral-900">{children}</h4>
+		<h4 className="mb-2 break-inside-avoid text-[0.8889em] leading-[1.5] font-semibold typeface-reader text-neutral-900">
+			{children}
+		</h4>
 	),
 	p: ({ children }: { children?: React.ReactNode }) => (
-		<div className="my-2 text-lg typeface-arizona text-neutral-800">{children}</div>
+		<div className="my-2 text-[1em] leading-[1.5556] typeface-reader text-neutral-800">{children}</div>
 	),
 	li: ({ children }: { children?: React.ReactNode }) => (
-		<div className="my-2 text-lg typeface-arizona text-neutral-800">{children}</div>
+		<div className="my-2 text-[1em] leading-[1.5556] typeface-reader text-neutral-800">{children}</div>
 	),
 	table: ({ children }: { children?: React.ReactNode }) => (
 		<table className="my-4 w-full border-collapse break-inside-avoid text-sm">{children}</table>
@@ -169,10 +155,10 @@ const MARKDOWN_COMPONENTS = {
 		<tr className="break-inside-avoid border-b border-neutral-200">{children}</tr>
 	),
 	th: ({ children }: { children?: React.ReactNode }) => (
-		<th className="break-inside-avoid px-2 py-1 text-left font-semibold typeface-arizona text-neutral-900">{children}</th>
+		<th className="break-inside-avoid px-2 py-1 text-left font-semibold typeface-reader text-neutral-900">{children}</th>
 	),
 	td: ({ children }: { children?: React.ReactNode }) => (
-		<td className="break-inside-avoid px-2 py-1 align-top typeface-arizona text-neutral-800">{children}</td>
+		<td className="break-inside-avoid px-2 py-1 align-top typeface-reader text-neutral-800">{children}</td>
 	),
 	img: ({ src, title }: { src?: string | Blob; title?: string }) => (
 		<span className="break-inside-avoid">
@@ -262,6 +248,7 @@ function ReaderContent() {
 
 	const [title, setTitle] = useState<TitleData | null>(null);
 	const [titleError, setTitleError] = useState(false);
+	const preferences = usePreferences();
 
 	useEffect(() => {
 		if (!titleId) return;
@@ -300,14 +287,23 @@ function ReaderContent() {
 	}
 	if (!title) return <LoadingOverlay />;
 
-	return <ReaderShell titleId={titleId} title={title} />;
+	return <ReaderShell titleId={titleId} title={title} preferences={preferences} />;
 }
 
 const FALLBACK_PAGE_HEIGHT = 1200;
 const PREFETCH_AHEAD = 10;
 const PREFETCH_BEHIND = 5;
+const estimateSize = () => FALLBACK_PAGE_HEIGHT;
 
-function ReaderShell({ titleId, title }: { titleId: string; title: TitleData }) {
+function ReaderShell({
+	titleId,
+	title,
+	preferences,
+}: {
+	titleId: string;
+	title: TitleData;
+	preferences: Preferences;
+}) {
 	const router = useRouter();
 	const initialPageNumber = typeof title.pageNumber === "number" ? title.pageNumber : 0;
 	const titleName = title.title;
@@ -327,14 +323,6 @@ function ReaderShell({ titleId, title }: { titleId: string; title: TitleData }) 
 
 	const questions = useQuestions();
 
-	const estimateSize = useCallback(
-		(index: number) => {
-			const p = pages[index];
-			return p ? estimatePageHeight(p) : FALLBACK_PAGE_HEIGHT;
-		},
-		[pages],
-	);
-
 	const virtualizer = useVirtualizer({
 		count: pageCount,
 		getScrollElement: () => parentRef.current,
@@ -342,6 +330,10 @@ function ReaderShell({ titleId, title }: { titleId: string; title: TitleData }) 
 		overscan: 4,
 		getItemKey: (index) => index,
 	});
+
+	// library default skips scroll compensation while scrolling up, causing drift
+	virtualizer.shouldAdjustScrollPositionOnItemSizeChange = (item, _delta, v) =>
+		item.start < (v.scrollElement?.scrollTop ?? 0);
 
 	useLayoutEffect(() => {
 		if (hasInitializedScrollRef.current) return;
@@ -433,6 +425,21 @@ function ReaderShell({ titleId, title }: { titleId: string; title: TitleData }) 
 		return () => clearTimeout(t);
 	}, [titleId, pageNumber]);
 
+	const pageNumberRef = useRef(pageNumber);
+	pageNumberRef.current = pageNumber;
+	const hasInitializedMeasureRef = useRef(false);
+	useEffect(() => {
+		if (!hasInitializedMeasureRef.current) {
+			hasInitializedMeasureRef.current = true;
+			return;
+		}
+		virtualizer.measure();
+		requestAnimationFrame(() => virtualizer.scrollToIndex(pageNumberRef.current, { align: "start" }));
+	}, [preferences.fontSize, preferences.typeface, virtualizer]);
+
+	const typefaceVar =
+		TYPEFACE_OPTIONS.find((o) => o.value === preferences.typeface)?.cssVar ?? "--font-arizona";
+
 	return (
 		<div className="relative flex h-svh w-svw flex-col overflow-hidden bg-neutral-50">
 			<nav className="z-50 flex typeface-arizona h-10 xl:h-16 w-full items-center justify-between border-b border-neutral-200 bg-neutral-50 px-4">
@@ -445,26 +452,49 @@ function ReaderShell({ titleId, title }: { titleId: string; title: TitleData }) 
 					{titleName}
 				</h1>
 
-				<Button
-					variant="ghost"
-					onClick={() => {
-						questions.close();
-						setTocOpen(true);
-					}}
-					aria-label="Table of contents"
-				>
-					<ListBulletsIcon className="size-4 xl:size-6" />
-					<span className="hidden lg:block">Contents</span>
-				</Button>
+				<div className="flex items-center">
+					<Button
+						variant="ghost"
+						onClick={() => {
+							questions.close();
+							preferences.close();
+							setTocOpen(true);
+						}}
+						aria-label="Table of contents"
+					>
+						<ListBulletsIcon className="size-4 xl:size-6" />
+						<span className="hidden lg:block">Contents</span>
+					</Button>
+
+					<Button
+						variant="ghost"
+						onClick={() => {
+							questions.close();
+							setTocOpen(false);
+							preferences.open();
+						}}
+						aria-label="Preferences"
+					>
+						<GearSixIcon className="size-4 xl:size-6" />
+						<span className="hidden lg:block">Preferences</span>
+					</Button>
+				</div>
 			</nav>
 
 			<main className="relative flex min-h-0 w-full flex-1 justify-center overflow-hidden">
 				{isLoading && <LoadingOverlay />}
 				<SelectionBubble contentRef={parentRef} onAskAI={questions.open} />
+				{preferences.isSpeedReaderMode && <SpeedReaderOverlay />}
 
 				<div
 					ref={parentRef}
 					className="h-full w-full overflow-x-hidden overflow-y-auto select-none px-4 md:px-32 lg:px-48 xl:px-96 2xl:px-[33svw]"
+					style={
+						{
+							fontSize: `${preferences.fontSize}px`,
+							"--reader-font": `var(${typefaceVar})`,
+						} as React.CSSProperties
+					}
 				>
 					<div
 						className="select-text"
@@ -476,7 +506,7 @@ function ReaderShell({ titleId, title }: { titleId: string; title: TitleData }) 
 					>
 						{virtualizer.getVirtualItems().map((virtualItem) => (
 							<div
-								className="py-8"
+								className={virtualItem.index === 0 ? "pt-8 pb-8" : "pb-8"}
 								key={virtualItem.key}
 								data-index={virtualItem.index}
 								ref={virtualizer.measureElement}
@@ -512,7 +542,7 @@ function ReaderShell({ titleId, title }: { titleId: string; title: TitleData }) 
 										),
 									)
 								) : (
-									<div className="flex h-[1200px] w-full items-center justify-center text-neutral-400">
+									<div className="flex h-292 w-full items-center justify-center text-neutral-400">
 										<CircleNotchIcon size={24} className="animate-spin" />
 									</div>
 								)}
@@ -550,6 +580,10 @@ function ReaderShell({ titleId, title }: { titleId: string; title: TitleData }) 
 						setTocOpen(false);
 					}}
 				/>
+			</SideDrawer>
+
+			<SideDrawer isOpen={preferences.isOpen} onClose={preferences.close} className="md:w-128">
+				<PreferencesPanel preferences={preferences} onClose={preferences.close} />
 			</SideDrawer>
 		</div>
 	);

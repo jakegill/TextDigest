@@ -18,7 +18,7 @@ from mineru.cli.common import do_parse
 DATA_BUCKET = os.environ["DATA_BUCKET"]
 PROJECT_ID = os.environ["PROJECT_ID"]
 
-TITLE_AIDED_MODEL = "gemini-3.1-flash-lite"
+GEMINI_3_1_FLASH_LITE = "gemini-3.1-flash-lite"
 VERTEX_LOCATION = "global"
 
 logger = logging.getLogger("mineru")
@@ -28,29 +28,37 @@ app = FastAPI()
 gcs_client = storage.Client()
 
 
-def _configure_title_aided() -> None:
-    """Mint a fresh Vertex access token and wire it into mineru's hybrid backend.
-
-    The token lives ~1 hour. Refresh per parse since parses are infrequent and
-    long-lived (multi-minute), so reusing a cached token across parses risks
-    expiry mid-call.
-    """
-    creds, _ = google.auth.default(
-        scopes=["https://www.googleapis.com/auth/cloud-platform"]
-    )
-    creds.refresh(GoogleRequest())
-    title_aided = {
-        "api_key": creds.token,
+def _vertex_llm_config(token: str, model: str) -> dict:
+    return {
+        "api_key": token,
         "base_url": (
             "https://aiplatform.googleapis.com"
             f"/v1beta1/projects/{PROJECT_ID}/locations/{VERTEX_LOCATION}"
             "/endpoints/openapi/"
         ),
-        "model": f"google/{TITLE_AIDED_MODEL}",
+        "model": f"google/{model}",
         "enable": True,
     }
-    _h.title_aided_config = title_aided
+
+
+def _configure_llm_aided() -> None:
+    """Mint a fresh Vertex access token and wire it into mineru's hybrid backend.
+
+    The token lives ~1 hour. Refresh per parse since parses are infrequent and
+    long-lived (multi-minute), so reusing a cached token across parses risks
+    expiry mid-call. One token serves all three passes.
+    """
+    creds, _ = google.auth.default(
+        scopes=["https://www.googleapis.com/auth/cloud-platform"]
+    )
+    creds.refresh(GoogleRequest())
+    token = creds.token
+    _h.title_aided_config = _vertex_llm_config(token, GEMINI_3_1_FLASH_LITE)
     _h.title_aided_enable = True
+    _h.text_aided_config = _vertex_llm_config(token, GEMINI_3_1_FLASH_LITE)
+    _h.text_aided_enable = True
+    _h.formula_aided_config = _vertex_llm_config(token, GEMINI_3_1_FLASH_LITE)
+    _h.formula_aided_enable = True
 
 
 @app.get("/health")
@@ -90,7 +98,7 @@ async def parse(body: ParseRequest) -> dict:
     if not pdf_bytes:
         raise HTTPException(status_code=400, detail="empty pdf")
 
-    _configure_title_aided()
+    _configure_llm_aided()
 
     with tempfile.TemporaryDirectory() as tmp:
         do_parse(

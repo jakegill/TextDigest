@@ -34,7 +34,7 @@ steps:
               . /workspace/.aws-creds.env
               set +a
 
-              gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
+              gcloud auth print-access-token | docker login -u oauth2accesstoken --password-stdin https://us-central1-docker.pkg.dev
               corepack enable
               pnpm install --frozen-lockfile
               pnpm exec sst install --stage "$BRANCH_NAME" --print-logs

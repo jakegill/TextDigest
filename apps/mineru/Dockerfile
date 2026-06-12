@@ -5,7 +5,6 @@ ENV PYTHONUNBUFFERED=1
 WORKDIR /app
 
 RUN pip install --no-cache-dir \
-        "mineru[pipeline] @ git+https://github.com/jakegill/MinerU.git@master" \
         "huggingface_hub" \
         "fastapi>=0.115.0" \
         "uvicorn[standard]>=0.32.0" \
@@ -14,6 +13,12 @@ RUN pip install --no-cache-dir \
         "google-cloud-storage>=2.18.0"
 
 RUN python3 -c "from huggingface_hub import snapshot_download; snapshot_download('opendatalab/MinerU2.5-Pro-2605-1.2B', local_dir='/models/MinerU2.5-Pro-2605-1.2B')"
+
+# MINERU_REF is pinned in infra/gpu.ts. A pip install from a moving branch ref
+# never busts the docker layer cache, so fork updates silently don't ship.
+ARG MINERU_REF=master
+RUN pip install --no-cache-dir \
+        "mineru[pipeline] @ git+https://github.com/jakegill/MinerU.git@${MINERU_REF}"
 
 RUN mineru-models-download -s huggingface -m pipeline
 

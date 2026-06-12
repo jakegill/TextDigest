@@ -17,6 +17,7 @@ const mineruImageRef = new dockerbuild.Image("mineru-image", {
 	context: { location: path.resolve("apps/mineru") },
 	platforms: ["linux/amd64"],
 	push: true,
+	buildArgs: { MINERU_REF: "71fce538546fa6a1e1c93418555099eb5fe82e4c" },
 	cacheFrom: [{ registry: { ref: cacheTag } }],
 	cacheTo: [{ registry: { ref: cacheTag, mode: "max", imageManifest: true } }],
 	load: false,

@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .routers import agents, health, titles
+from .routers import agents, health, preferences, titles
 
 app = FastAPI(title="text-digest-v2 api")
 
@@ -15,3 +15,4 @@ app.add_middleware(
 app.include_router(health.router)
 app.include_router(titles.router)
 app.include_router(agents.router)
+app.include_router(preferences.router)

@@ -2,7 +2,7 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { ArrowLeftIcon, CircleNotchIcon, ListBulletsIcon } from "@phosphor-icons/react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import rehypeAutolinkHeadings from "rehype-autolink-headings";
 import rehypeHighlight from "rehype-highlight";
@@ -103,31 +103,6 @@ function groupBlocksByPage(blocks: ContentBlock[]): Map<number, ContentBlock[]> 
 	}
 	return map;
 }
-
-const CHARS_PER_LINE = 60;
-const LINE_PX = 28;
-const BLOCK_MARGIN_PX = 16;
-const IMAGE_RESERVE_PX = 600;
-const HEADING_LINE_PX: Record<number, number> = { 1: 56, 2: 48, 3: 40, 4: 36 };
-const HEADING_REGEX = /^(#{1,4})\s/;
-
-function estimateItemHeight(item: Item): number {
-	if (item.md.startsWith("![")) return IMAGE_RESERVE_PX + BLOCK_MARGIN_PX;
-	const headingMatch = item.md.match(HEADING_REGEX);
-	if (headingMatch) {
-		const level = headingMatch[1].length;
-		const lines = Math.max(1, Math.ceil(item.md.length / CHARS_PER_LINE));
-		return lines * (HEADING_LINE_PX[level] ?? 32) + BLOCK_MARGIN_PX;
-	}
-	const lines = item.md.split("\n").reduce((sum, line) => sum + Math.max(1, Math.ceil(line.length / CHARS_PER_LINE)), 0);
-	return lines * LINE_PX + BLOCK_MARGIN_PX;
-}
-
-const estimatePageHeight = (page: Page): number =>
-	Math.max(
-		200,
-		page.reduce((sum, it) => sum + estimateItemHeight(it), 0),
-	);
 
 type MarkdownProps = React.ComponentProps<typeof ReactMarkdown>;
 
@@ -306,6 +281,7 @@ function ReaderContent() {
 const FALLBACK_PAGE_HEIGHT = 1200;
 const PREFETCH_AHEAD = 10;
 const PREFETCH_BEHIND = 5;
+const estimateSize = () => FALLBACK_PAGE_HEIGHT;
 
 function ReaderShell({ titleId, title }: { titleId: string; title: TitleData }) {
 	const router = useRouter();
@@ -327,14 +303,6 @@ function ReaderShell({ titleId, title }: { titleId: string; title: TitleData }) 
 
 	const questions = useQuestions();
 
-	const estimateSize = useCallback(
-		(index: number) => {
-			const p = pages[index];
-			return p ? estimatePageHeight(p) : FALLBACK_PAGE_HEIGHT;
-		},
-		[pages],
-	);
-
 	const virtualizer = useVirtualizer({
 		count: pageCount,
 		getScrollElement: () => parentRef.current,
@@ -342,6 +310,10 @@ function ReaderShell({ titleId, title }: { titleId: string; title: TitleData }) 
 		overscan: 4,
 		getItemKey: (index) => index,
 	});
+
+	// library default skips scroll compensation while scrolling up, causing drift
+	virtualizer.shouldAdjustScrollPositionOnItemSizeChange = (item, _delta, v) =>
+		item.start < (v.scrollElement?.scrollTop ?? 0);
 
 	useLayoutEffect(() => {
 		if (hasInitializedScrollRef.current) return;
@@ -512,7 +484,7 @@ function ReaderShell({ titleId, title }: { titleId: string; title: TitleData }) 
 										),
 									)
 								) : (
-									<div className="flex h-[1200px] w-full items-center justify-center text-neutral-400">
+									<div className="flex h-284 w-full items-center justify-center text-neutral-400">
 										<CircleNotchIcon size={24} className="animate-spin" />
 									</div>
 								)}

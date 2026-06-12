@@ -506,7 +506,7 @@ function ReaderShell({
 					>
 						{virtualizer.getVirtualItems().map((virtualItem) => (
 							<div
-								className="py-8"
+								className={virtualItem.index === 0 ? "pt-8 pb-8" : "pb-8"}
 								key={virtualItem.key}
 								data-index={virtualItem.index}
 								ref={virtualizer.measureElement}
@@ -542,7 +542,7 @@ function ReaderShell({
 										),
 									)
 								) : (
-									<div className="flex h-284 w-full items-center justify-center text-neutral-400">
+									<div className="flex h-292 w-full items-center justify-center text-neutral-400">
 										<CircleNotchIcon size={24} className="animate-spin" />
 									</div>
 								)}

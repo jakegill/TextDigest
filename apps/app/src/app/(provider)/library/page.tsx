@@ -136,7 +136,7 @@ export default function Page() {
 	const recent = filtered
 		.filter((t) => t.lastViewed)
 		.sort((a, b) => (b.lastViewed ?? "").localeCompare(a.lastViewed ?? ""))
-		.slice(0, 8);
+		.slice(0, 9);
 
 	return (
 		<div className="h-[100svh] w-[100svw] flex justify-center">
@@ -183,7 +183,7 @@ export default function Page() {
 				{recent.length > 0 && (
 					<section className="space-y-3">
 						<h2 className="text-xl typeface-arizona text-neutral-600 font-medium">Recent titles</h2>
-						<ul className="grid grid-cols-3 gap-4 sm:grid-cols-3 md:grid-cols-4 md:gap-6">
+						<ul className="grid grid-cols-3 gap-4 sm:grid-cols-3 md:grid-cols-4 md:gap-6 md:[&>li:nth-child(9)]:hidden">
 							{recent.map((t) => (
 								<TitleCardView key={t.titleId} title={t} onDelete={handleDelete} />
 							))}
@@ -318,8 +318,12 @@ function TitleCardView({ title, onDelete }: { title: TitleCard; onDelete: (title
 
 function SkeletonGrid() {
 	return (
-		<ul className="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-4 gap-6" aria-busy="true" aria-label="Loading titles">
-			{Array.from({ length: 8 }).map((_, i) => (
+		<ul
+			className="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-4 gap-6 md:[&>li:nth-child(9)]:hidden"
+			aria-busy="true"
+			aria-label="Loading titles"
+		>
+			{Array.from({ length: 9 }).map((_, i) => (
 				<li key={i} className="flex flex-col gap-2">
 					<div className="relative aspect-3/4 bg-neutral-200 animate-pulse" />
 					<div className="h-3 w-3/4 bg-neutral-200 animate-pulse" />

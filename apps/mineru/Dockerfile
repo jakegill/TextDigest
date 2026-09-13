@@ -36,6 +36,16 @@ ARG MINERU_REF=master
 RUN pip install --no-cache-dir \
         "mineru[pipeline] @ git+https://github.com/jakegill/MinerU.git@${MINERU_REF}"
 
+# mineru-vl-utils <2 pre-renders the prompt via LLM.renderer before calling
+# LLM.generate(). vLLM 0.21.0 is the first release to expose LLM.renderer, so
+# that path newly activates on this base image: generate() re-renders and drops
+# the mm_kwargs/mm_hashes that carry the image tensors, while the <|image_pad|>
+# placeholders remain. The VLM then runs vision-less and emits empty/garbage
+# layout output, so every page yields zero blocks. 2.0.0+ passes the raw prompt
+# through untouched. mineru 3.4.5 still caps vl-utils at <2, hence the explicit
+# override after the mineru install (pip warns but resolves).
+RUN pip install --no-cache-dir "mineru-vl-utils>=2.0.0,<3"
+
 # -m pipeline fetches the PP-OCRv6-era pipeline models (doclayout v2, formula,
 # paddle ocr, table, structure) and writes models-dir.pipeline into mineru.json.
 RUN mineru-models-download -s huggingface -m pipeline

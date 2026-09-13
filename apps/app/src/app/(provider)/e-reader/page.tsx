@@ -187,8 +187,7 @@ function remarkRestoreDollars() {
 // for KaTeX to pick up. Pairing is scoped to a single text node, which is what
 // keeps currency safe: a lone `$90` renders as `$90</td><td>$` style fragments
 // that never form a pair, whereas real math (`$D_t$`) always arrives paired.
-// It must run after rehypeRaw (to see the table) and before rehypeKatex (to be
-// consumed), so it cannot live in the shared plugin list that runs katex first.
+// Requires rehypeRaw to have run first, and a later rehype-katex to consume it.
 type HastNode = {
 	type: string;
 	tagName?: string;
@@ -317,8 +316,17 @@ function blockToMd(b: ContentBlock): string {
 		return t;
 	}
 	if (b.type === "list") {
-		const ordered = /ordered|ol/i.test(b.sub_type ?? "");
-		return (b.list_items ?? []).map((t, i) => (ordered ? `${i + 1}. ${t}` : `- ${t}`)).join("\n");
+		// MinerU already embeds the marker in most items ("1. Inventory",
+		// "- More problems."), so prefixing unconditionally produced doubled
+		// markers — and worse, "- 1. Foo" parses as a nested list. Leave
+		// marked items untouched and only synthesise a bullet when absent.
+		const MARKER = /^\s*(\d+[.)]|[-*•])\s/;
+		return (b.list_items ?? [])
+			.map((t) => {
+				const clean = t.replace(/\s+$/, "");
+				return MARKER.test(clean) ? clean : `- ${clean}`;
+			})
+			.join("\n");
 	}
 	if (b.type === "table") {
 		// table_body is a complete HTML <table>; rehype-raw renders it. Captions
@@ -430,8 +438,23 @@ const MARKDOWN_COMPONENTS = {
 	p: ({ children }: { children?: React.ReactNode }) => (
 		<div className="my-2 text-[1em] leading-[1.5556] typeface-reader text-neutral-800">{children}</div>
 	),
+	// Tailwind's preflight sets `list-style: none` and the old `li` override
+	// rendered a <div>, so parsed lists showed as an undifferentiated stack of
+	// paragraphs with no markers. Markdown consumes the `- `/`1. ` prefixes, so
+	// the markers must come back from CSS. MinerU embeds its own numbers in
+	// many items ("1. Inventory"), which the parser leaves as literal text and
+	// CSS would then duplicate, so those are emitted unwrapped above and keep
+	// showing their own numbering.
+	ul: ({ children }: { children?: React.ReactNode }) => (
+		<ul className="my-2 list-disc pl-5">{children}</ul>
+	),
+	ol: ({ children }: { children?: React.ReactNode }) => (
+		<ol className="my-2 list-decimal pl-5">{children}</ol>
+	),
 	li: ({ children }: { children?: React.ReactNode }) => (
-		<div className="my-2 text-[1em] leading-[1.5556] typeface-reader text-neutral-800">{children}</div>
+		<li className="my-2 pl-1 text-[1em] leading-[1.5556] typeface-reader text-neutral-800">
+			{children}
+		</li>
 	),
 	table: ({ children }: { children?: React.ReactNode }) => (
 		<table className="my-4 w-full border-collapse break-inside-avoid text-sm">{children}</table>

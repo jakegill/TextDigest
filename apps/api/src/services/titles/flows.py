@@ -12,7 +12,7 @@ from google.cloud.firestore import SERVER_TIMESTAMP
 from google.genai import errors as genai_errors
 
 from ...dependencies import bucket, firestore_client
-from . import cover, mineru, progress, service, toc, vector_index
+from . import cover, mineru, progress, service, toc
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -198,17 +198,6 @@ async def stage_process(
             progress.update,
             uid,
             task_id,
-            stage="vectorizing",
-        )
-
-        with timed(task_id, "vectorize"):
-            n_chunks = await vector_index.build(uid, title_id, content_list)
-        logger.info("[%s] vector index: %d chunks", task_id, n_chunks)
-
-        await asyncio.to_thread(
-            progress.update,
-            uid,
-            task_id,
             stage="toc",
         )
 
@@ -269,13 +258,12 @@ async def stage_process(
 
         total = time.perf_counter() - start
         logger.info(
-            "[%s] /process total: %.2fs (title=%r, author=%r, toc=%d, chunks=%d)",
+            "[%s] /process total: %.2fs (title=%r, author=%r, toc=%d)",
             task_id,
             total,
             meta.title,
             meta.author,
             len(toc_entries),
-            n_chunks,
         )
 
     except Exception as exc:

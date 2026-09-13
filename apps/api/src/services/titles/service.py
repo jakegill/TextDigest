@@ -7,7 +7,6 @@ from google.cloud.firestore import Query
 
 from ...dependencies import bucket, firestore_client, signing_credentials
 from ...models.titles import Title, TitleMetadata, TocEntry
-from . import vector_index
 
 MAX_PAGE_RANGE = 50
 
@@ -178,7 +177,6 @@ def delete_for_user(uid: str, title_id: str) -> None:
         .collection("titles")
         .document(title_id)
     )
-    vector_index.delete(uid, title_id)
     ref.delete()
     # title_id == task_id, so the pending/agent-staged prefixes (which survive
     # failed runs to keep retries possible) are addressable here too.

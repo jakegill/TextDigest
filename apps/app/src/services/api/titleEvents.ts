@@ -7,7 +7,6 @@ export type TitleProgressStage =
 	| "cover"
 	| "metadata"
 	| "parsing"
-	| "vectorizing"
 	| "toc"
 	| "writing"
 	| "done"

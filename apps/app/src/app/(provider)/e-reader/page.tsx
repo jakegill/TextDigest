@@ -29,13 +29,20 @@ import { putTitle } from "@/services/api/putTitle";
 export const dynamic = "force-dynamic";
 
 type ContentBlock = {
-	type: "text" | "image" | "list" | string;
+	type: "text" | "image" | "list" | "table" | "chart" | "code" | string;
 	text?: string;
 	text_level?: number;
 	img_path?: string;
 	image_caption?: string[];
 	list_items?: string[];
 	sub_type?: string;
+	table_body?: string;
+	table_caption?: string[];
+	table_footnote?: string[];
+	chart_caption?: string[];
+	code_body?: string;
+	code_caption?: string[];
+	guess_lang?: string;
 	bbox?: Bbox;
 	page_idx: number;
 };
@@ -43,7 +50,84 @@ type ContentBlock = {
 type Item = { md: string; centered: boolean };
 type Page = Item[];
 
-const KEEP_TYPES = new Set(["text", "image", "list"]);
+// Every block type MinerU emits that carries reader-visible content. The
+// visual types (image/chart) and tables were previously dropped here, which
+// silently discarded ~25% of a parsed document — captions survived (they come
+// through as text blocks) so figures rendered as orphaned gray captions.
+// Auxiliary types (header, page_number, footer, page_footnote) stay excluded.
+const KEEP_TYPES = new Set([
+	"text",
+	"image",
+	"list",
+	"table",
+	"chart",
+	"code",
+]);
+
+// remark-math reads `\$` as an *escaped* delimiter, so `$c = \$250$` closes the
+// span at the `\$`: the math node becomes the truncated `c = \` (which KaTeX
+// renders as a red error) and the rest of the sentence is swallowed as math.
+// Replacing the two-char sequence with a private-use sentinel before parsing
+// stops it acting as a delimiter at all; it is restored per-node afterwards,
+// to `\$` inside math (KaTeX accepts it) and a plain `$` in text.
+const DOLLAR_SENTINEL = "\uE000";
+
+function protectDollars(md: string): string {
+	return md.split("\\$").join(DOLLAR_SENTINEL);
+}
+
+// Same as protectDollars, in reverse, for consumers that want the raw text
+// rather than a ReactMarkdown tree (the question-answering context). The
+// sentinel is never meant to escape this module.
+function readableMd(md: string): string {
+	return md.split(DOLLAR_SENTINEL).join("$");
+}
+
+type MdNode = { type: string; value?: string; children?: MdNode[] };
+
+function remarkRestoreDollars() {
+	return (tree: MdNode): void => {
+		const walk = (n: MdNode): void => {
+			if (n.type === "inlineMath" || n.type === "math") {
+				if (typeof n.value === "string") {
+					n.value = n.value.split(DOLLAR_SENTINEL).join("\\$");
+					if (n.type === "inlineMath") {
+						// KaTeX rejects \tag outside display mode, and MinerU
+						// occasionally emits a numbered display equation inline
+						// in prose. Convert to a literal equation number so it
+						// renders instead of erroring red.
+						n.value = n.value.replace(/\\tag\s*\{([^}]*)\}/g, "\\quad($1)");
+					}
+				}
+			} else if (typeof n.value === "string") {
+				n.value = n.value.split(DOLLAR_SENTINEL).join("$");
+			}
+			n.children?.forEach(walk);
+		};
+		walk(tree);
+	};
+}
+
+// MinerU wraps code/algorithm blocks in a presentation-only <div
+// class="mineru-algorithm"> (monospace, pre-wrap). Emitting that HTML verbatim
+// would drop its contents into the raw-HTML path, where rehype-katex does not
+// run — so `$\ell =$` would show as literal text instead of typesetting.
+// Stripping to text and emitting a fenced block lets rehype-highlight style it
+// as code, with entities unescaped (&lt; -> <).
+function htmlToText(html: string): string {
+	return html
+		.replace(/<br\s*\/?>/gi, "\n")
+		.replace(/<\/(div|p|li|tr|h[1-6])>/gi, "\n")
+		.replace(/<[^>]+>/g, "")
+		.replace(/&lt;/g, "<")
+		.replace(/&gt;/g, ">")
+		.replace(/&quot;/g, '"')
+		.replace(/&#39;/g, "'")
+		.replace(/&nbsp;/g, " ")
+		.replace(/&amp;/g, "&")
+		.replace(/\n{3,}/g, "\n\n")
+		.trim();
+}
 
 function blockToMd(b: ContentBlock): string {
 	if (b.type === "text") {
@@ -53,13 +137,29 @@ function blockToMd(b: ContentBlock): string {
 		}
 		return b.text ?? "";
 	}
-	if (b.type === "image") {
-		const cap = (b.image_caption ?? []).join(" ").replace(/"/g, '\\"');
+	if (b.type === "image" || b.type === "chart") {
+		const cap = (b.image_caption ?? b.chart_caption ?? []).join(" ").replace(/"/g, '\\"');
 		return `![](${b.img_path ?? ""} "${cap}")`;
 	}
 	if (b.type === "list") {
 		const ordered = /ordered|ol/i.test(b.sub_type ?? "");
 		return (b.list_items ?? []).map((t, i) => (ordered ? `${i + 1}. ${t}` : `- ${t}`)).join("\n");
+	}
+	if (b.type === "table") {
+		// table_body is a complete HTML <table>; rehype-raw renders it. Captions
+		// are never duplicated as text blocks, so they must be emitted here.
+		const cap = (b.table_caption ?? []).join(" ").trim();
+		return [cap, b.table_body ?? ""].filter(Boolean).join("\n\n");
+	}
+	if (b.type === "code") {
+		const body = htmlToText(b.code_body ?? "");
+		if (!body) return "";
+		const cap = (b.code_caption ?? []).join(" ").trim();
+		// A ``` inside the body would close the fence early; widen it. The
+		// language is only a presentation hint, so an unknown one is harmless.
+		const fence = body.includes("```") ? "````" : "```";
+		const block = `${fence}${b.guess_lang ?? ""}\n${body}\n${fence}`;
+		return cap ? `${cap}\n\n${block}` : block;
 	}
 	return "";
 }
@@ -81,15 +181,17 @@ function buildPage(blocks: ContentBlock[]): Page {
 				bboxes.push(next.bbox ?? DEFAULT_BBOX);
 				i++;
 			}
-			built.push({ md: `# ${parts.join(" ")}`, centered: isCentered(unionBbox(bboxes)) });
+			built.push({ md: protectDollars(`# ${parts.join(" ")}`), centered: isCentered(unionBbox(bboxes)) });
 			continue;
 		}
 		const md = blockToMd(cur).trim();
 		if (md) {
-			const isImage = cur.type === "image";
+			// Charts are plots, so they center like images rather than sitting
+			// in the text column.
+			const isFigure = cur.type === "image" || cur.type === "chart";
 			const isTitle = cur.type === "text" && (cur.text_level ?? 0) > 0;
-			const centered = isImage || (isTitle && isCentered(cur.bbox ?? DEFAULT_BBOX));
-			built.push({ md, centered });
+			const centered = isFigure || (isTitle && isCentered(cur.bbox ?? DEFAULT_BBOX));
+			built.push({ md: protectDollars(md), centered });
 		}
 		i++;
 	}
@@ -109,7 +211,11 @@ function groupBlocksByPage(blocks: ContentBlock[]): Map<number, ContentBlock[]> 
 
 type MarkdownProps = React.ComponentProps<typeof ReactMarkdown>;
 
-const MARKDOWN_REMARK_PLUGINS: MarkdownProps["remarkPlugins"] = [remarkGfm, remarkMath];
+const MARKDOWN_REMARK_PLUGINS: MarkdownProps["remarkPlugins"] = [
+	remarkGfm,
+	remarkMath,
+	remarkRestoreDollars,
+];
 const MARKDOWN_REHYPE_PLUGINS: MarkdownProps["rehypePlugins"] = [
 	rehypeKatex,
 	rehypeRaw,
@@ -565,7 +671,7 @@ function ReaderShell({
 					titleId={titleId}
 					title={titleName}
 					author={titleAuthor}
-					pageContent={(pages[pageNumber] ?? []).map((i) => i.md).join("\n\n")}
+					pageContent={(pages[pageNumber] ?? []).map((i) => readableMd(i.md)).join("\n\n")}
 				/>
 			</SideDrawer>
 
@@ -593,17 +699,17 @@ function Figure({ src, caption }: { src: string; caption?: string }) {
 	return (
 		<span className="inline-block max-w-full">
 			{/* eslint-disable-next-line @next/next/no-img-element */}
-			<img src={src} alt="" className="h-auto max-w-full" />
+			<img src={src} alt={caption ?? ""} className="h-auto max-w-full" />
 			{caption && (
 				<div className=" text-sm typeface-diatype text-neutral-800">
 					<ReactMarkdown
-						remarkPlugins={[remarkGfm, remarkMath]}
+						remarkPlugins={MARKDOWN_REMARK_PLUGINS}
 						rehypePlugins={[rehypeRaw, rehypeKatex]}
 						components={{
 							p: ({ children }) => <span className="text-sm lg:text-base typeface-diatype">{children}</span>,
 						}}
 					>
-						{caption}
+						{protectDollars(caption)}
 					</ReactMarkdown>
 				</div>
 			)}

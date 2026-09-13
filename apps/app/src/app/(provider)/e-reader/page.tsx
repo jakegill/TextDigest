@@ -179,6 +179,95 @@ function remarkRestoreDollars() {
 	};
 }
 
+// MinerU emits tables as raw HTML, which never passes through remark-math, so
+// `$D_t$` in a cell stays literal text: 146 of 156 tables in a 726-page sample
+// rendered their math as `$D_{t}$`. rehype-katex only processes elements
+// carrying a math-* class, so this walks the expanded <table> and rewrites
+// `$...$` runs into math-inline elements — the same shape remark-math emits —
+// for KaTeX to pick up. Pairing is scoped to a single text node, which is what
+// keeps currency safe: a lone `$90` renders as `$90</td><td>$` style fragments
+// that never form a pair, whereas real math (`$D_t$`) always arrives paired.
+// It must run after rehypeRaw (to see the table) and before rehypeKatex (to be
+// consumed), so it cannot live in the shared plugin list that runs katex first.
+type HastNode = {
+	type: string;
+	tagName?: string;
+	value?: string;
+	properties?: Record<string, unknown>;
+	children?: HastNode[];
+};
+
+function rehypeHtmlMath() {
+	const PAIR = /\$([^$\n]+?)\$/g;
+	return (tree: HastNode): void => {
+		const rewrite = (node: HastNode): void => {
+			const kids = node.children;
+			if (!kids) return;
+			const next: HastNode[] = [];
+			for (const child of kids) {
+				const raw = child.properties?.className;
+				const cls: string[] = Array.isArray(raw)
+					? (raw as string[])
+					: typeof raw === "string"
+						? [raw]
+						: [];
+				if (
+					child.type === "element" &&
+					(cls.includes("math-inline") ||
+						cls.includes("math-display") ||
+						cls.includes("language-math"))
+				) {
+					next.push(child);
+					continue;
+				}
+				if (child.type === "element") rewrite(child);
+				if (child.type !== "text" || typeof child.value !== "string") {
+					next.push(child);
+					continue;
+				}
+				const text = child.value;
+				let last = 0;
+				let m: RegExpExecArray | null;
+				PAIR.lastIndex = 0;
+				while ((m = PAIR.exec(text))) {
+					// An odd run of backslashes escapes the opening $, so the
+					// pair is literal currency and must be left alone.
+					let b = m.index - 1;
+					while (b >= 0 && text[b] === "\\") b--;
+					if ((m.index - 1 - b) % 2 === 1) continue;
+					if (m.index > last) {
+						next.push({ type: "text", value: text.slice(last, m.index) });
+					}
+					next.push({
+						type: "element",
+						tagName: "code",
+						properties: { className: ["math-inline"] },
+						children: [
+							{
+								type: "text",
+								value: m[1].split(DOLLAR_SENTINEL).join("\\$"),
+							},
+						],
+					});
+					last = m.index + m[0].length;
+				}
+				if (last < text.length) {
+					next.push({
+						type: "text",
+						value: text.slice(last).split(DOLLAR_SENTINEL).join("$"),
+					});
+				}
+			}
+			node.children = next;
+		};
+		const visit = (n: HastNode): void => {
+			if (n.tagName === "table") return rewrite(n);
+			n.children?.forEach(visit);
+		};
+		visit(tree);
+	};
+}
+
 // MinerU wraps code/algorithm blocks in a presentation-only <div
 // class="mineru-algorithm"> (monospace, pre-wrap). Emitting that HTML verbatim
 // would drop its contents into the raw-HTML path, where rehype-katex does not
@@ -304,9 +393,14 @@ const MARKDOWN_REMARK_PLUGINS: MarkdownProps["remarkPlugins"] = [
 	remarkMath,
 	remarkRestoreDollars,
 ];
+// Order matters: rehypeRaw must expand the raw <table> HTML first, then
+// rehypeHtmlMath converts its `$...$` cells into math elements, and only then
+// can rehypeKatex render them. Running katex first (as this list used to) left
+// every table's math as literal text.
 const MARKDOWN_REHYPE_PLUGINS: MarkdownProps["rehypePlugins"] = [
-	rehypeKatex,
 	rehypeRaw,
+	rehypeHtmlMath,
+	rehypeKatex,
 	rehypeSlug,
 	rehypeAutolinkHeadings,
 	[rehypeHighlight, { ignoreMissing: true }],

@@ -151,8 +151,6 @@ function stageLabel(e: TitleProgressEvent): string {
 			return "Reading cover…";
 		case "parsing":
 			return "Parsing…";
-		case "vectorizing":
-			return "Vectorizing…";
 		case "toc":
 			return "Extracting TOC…";
 		case "writing":

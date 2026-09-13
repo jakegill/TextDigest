@@ -73,6 +73,7 @@ class ParseRequest(BaseModel):
     parsed_md_key: str
     content_list_key: str
     lang: str = "en"
+    effort: str = "high"
 
 
 @app.post("/parse")
@@ -107,6 +108,7 @@ async def parse(body: ParseRequest) -> dict:
             pdf_bytes_list=[pdf_bytes],
             p_lang_list=[body.lang],
             backend="hybrid-auto-engine",
+            effort=body.effort,
         )
         root = Path(tmp) / title_id
 

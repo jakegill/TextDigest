@@ -14,6 +14,7 @@ async def parse_pdf(
     images_prefix: str,
     parsed_md_key: str,
     content_list_key: str,
+    effort: str = "high",
 ) -> list[dict]:
     # Cloud Run OIDC bearer token authorizes the call; api-sa has run.invoker
     # on the mineru service (see infra/cpu.ts api-invokes-mineru).
@@ -33,6 +34,7 @@ async def parse_pdf(
                 "parsed_md_key": parsed_md_key,
                 "content_list_key": content_list_key,
                 "lang": "en",
+                "effort": effort,
             },
         )
         r.raise_for_status()

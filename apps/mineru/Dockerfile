@@ -1,8 +1,24 @@
-FROM vllm/vllm-openai:v0.11.2
+# Upstream pairs MinerU 3.4 with vLLM 0.21.0 (CUDA 13.0) — matches the
+# nvidia-rtx-pro-6000 Cloud Run node (compute capability 12.x, CUDA 13).
+FROM vllm/vllm-openai:v0.21.0
 
 ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
+
+# libgl1: opencv; Noto fonts: CJK glyph rendering in extracted images;
+# git: the mineru[pipeline] install below pulls from a git URL, and
+# vllm-openai:v0.21.0 no longer ships git (v0.11.2 did).
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        libgl1 \
+        git \
+        fonts-noto-core \
+        fonts-noto-cjk \
+        fontconfig && \
+    fc-cache -fv && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
 RUN pip install --no-cache-dir \
         "huggingface_hub" \
@@ -20,8 +36,22 @@ ARG MINERU_REF=master
 RUN pip install --no-cache-dir \
         "mineru[pipeline] @ git+https://github.com/jakegill/MinerU.git@${MINERU_REF}"
 
+# mineru-vl-utils <2 pre-renders the prompt via LLM.renderer before calling
+# LLM.generate(). vLLM 0.21.0 is the first release to expose LLM.renderer, so
+# that path newly activates on this base image: generate() re-renders and drops
+# the mm_kwargs/mm_hashes that carry the image tensors, while the <|image_pad|>
+# placeholders remain. The VLM then runs vision-less and emits empty/garbage
+# layout output, so every page yields zero blocks. 2.0.0+ passes the raw prompt
+# through untouched. mineru 3.4.5 still caps vl-utils at <2, hence the explicit
+# override after the mineru install (pip warns but resolves).
+RUN pip install --no-cache-dir "mineru-vl-utils>=2.0.0,<3"
+
+# -m pipeline fetches the PP-OCRv6-era pipeline models (doclayout v2, formula,
+# paddle ocr, table, structure) and writes models-dir.pipeline into mineru.json.
 RUN mineru-models-download -s huggingface -m pipeline
 
+# models-dir is a dict {pipeline: ..., vlm: ...} in 3.4; the download step
+# wrote the pipeline key, we add the vlm key pointing at the baked weights.
 RUN python3 -c "import json; p='/root/mineru.json'; d=json.load(open(p)); d['models-dir']['vlm']='/models/MinerU2.5-Pro-2605-1.2B'; json.dump(d, open(p,'w'))"
 
 RUN echo "=== /root/mineru.json at end of build ===" && cat /root/mineru.json && echo "=== end ==="

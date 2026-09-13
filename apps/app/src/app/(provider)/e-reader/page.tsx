@@ -29,9 +29,10 @@ import { putTitle } from "@/services/api/putTitle";
 export const dynamic = "force-dynamic";
 
 type ContentBlock = {
-	type: "text" | "image" | "list" | "table" | "chart" | "code" | string;
+	type: "text" | "image" | "list" | "table" | "chart" | "code" | "equation" | string;
 	text?: string;
 	text_level?: number;
+	text_format?: string;
 	img_path?: string;
 	image_caption?: string[];
 	list_items?: string[];
@@ -62,6 +63,7 @@ const KEEP_TYPES = new Set([
 	"table",
 	"chart",
 	"code",
+	"equation",
 ]);
 
 // remark-math reads `\$` as an *escaped* delimiter, so `$c = \$250$` closes the
@@ -83,28 +85,186 @@ function readableMd(md: string): string {
 	return md.split(DOLLAR_SENTINEL).join("$");
 }
 
-type MdNode = { type: string; value?: string; children?: MdNode[] };
+type MdNode = { type: string; value?: string; data?: unknown; children?: MdNode[] };
+
+// MinerU sometimes emits math (h_{t}, T_{P}) *inside* \text{...}. KaTeX treats
+// \text as text mode, where _ and ^ are illegal, so one stray subscript voids
+// the entire equation. Escape them so the label still reads literally. Embedded
+// $...$ is left alone so genuine math inside a label keeps working.
+const TEXT_MODE_CMDS =
+	/^\\(text|textrm|textit|textbf|textnormal|textsf|texttt|mbox)\s*\{/;
+
+function escapeTextModeScripts(tex: string): string {
+	let out = "";
+	let i = 0;
+	while (i < tex.length) {
+		const m = TEXT_MODE_CMDS.exec(tex.slice(i));
+		if (!m) {
+			out += tex[i++];
+			continue;
+		}
+		let j = i + m[0].length;
+		const start = j;
+		let depth = 1;
+		while (j < tex.length && depth > 0) {
+			if (tex[j] === "\\") {
+				j += 2;
+				continue;
+			}
+			if (tex[j] === "{") depth++;
+			else if (tex[j] === "}") {
+				depth--;
+				if (depth === 0) break;
+			}
+			j++;
+		}
+		if (depth !== 0) {
+			out += tex[i++];
+			continue;
+		}
+		const inner = tex
+			.slice(start, j)
+			.split(/(\$[^$]*\$)/)
+			.map((part, idx) =>
+				idx % 2 === 1 ? part : part.replace(/(^|[^\\])([_^])/g, "$1\\$2"),
+			)
+			.join("");
+		out += m[0] + inner + "}";
+		i = j + 1;
+	}
+	return out;
+}
+
+// Anything remark-math may hand to KaTeX, cleaned of the sentinel and of the
+// constructs KaTeX rejects. `inline` guards the \tag case.
+function normalizeMath(tex: string, inline: boolean): string {
+	let v = tex.split(DOLLAR_SENTINEL).join("\\$");
+	if (inline) {
+		// KaTeX rejects \tag outside display mode, and MinerU occasionally
+		// emits a numbered display equation inline in prose. Convert it to a
+		// literal equation number so it renders instead of erroring red.
+		v = v.replace(/\\tag\s*\{([^}]*)\}/g, "\\quad($1)");
+	}
+	return escapeTextModeScripts(v);
+}
 
 function remarkRestoreDollars() {
 	return (tree: MdNode): void => {
 		const walk = (n: MdNode): void => {
 			if (n.type === "inlineMath" || n.type === "math") {
+				const inline = n.type === "inlineMath";
 				if (typeof n.value === "string") {
-					n.value = n.value.split(DOLLAR_SENTINEL).join("\\$");
-					if (n.type === "inlineMath") {
-						// KaTeX rejects \tag outside display mode, and MinerU
-						// occasionally emits a numbered display equation inline
-						// in prose. Convert to a literal equation number so it
-						// renders instead of erroring red.
-						n.value = n.value.replace(/\\tag\s*\{([^}]*)\}/g, "\\quad($1)");
-					}
+					n.value = normalizeMath(n.value, inline);
 				}
+				// remark-math precomputes the KaTeX hast into node.data during
+				// parsing, and remarkRehype prefers that over node.value. Fixing
+				// only node.value leaves the sentinel in the tree that actually
+				// reaches KaTeX, so the precomputed copy must be rewritten too.
+				const visit = (d: unknown): void => {
+					if (Array.isArray(d)) return d.forEach(visit);
+					if (!d || typeof d !== "object") return;
+					const obj = d as Record<string, unknown>;
+					if (typeof obj.value === "string") {
+						obj.value = normalizeMath(obj.value, inline);
+					}
+					for (const v of Object.values(obj)) visit(v);
+				};
+				if (n.data) visit(n.data);
 			} else if (typeof n.value === "string") {
 				n.value = n.value.split(DOLLAR_SENTINEL).join("$");
 			}
 			n.children?.forEach(walk);
 		};
 		walk(tree);
+	};
+}
+
+// MinerU emits tables as raw HTML, which never passes through remark-math, so
+// `$D_t$` in a cell stays literal text: 146 of 156 tables in a 726-page sample
+// rendered their math as `$D_{t}$`. rehype-katex only processes elements
+// carrying a math-* class, so this walks the expanded <table> and rewrites
+// `$...$` runs into math-inline elements — the same shape remark-math emits —
+// for KaTeX to pick up. Pairing is scoped to a single text node, which is what
+// keeps currency safe: a lone `$90` renders as `$90</td><td>$` style fragments
+// that never form a pair, whereas real math (`$D_t$`) always arrives paired.
+// It must run after rehypeRaw (to see the table) and before rehypeKatex (to be
+// consumed), so it cannot live in the shared plugin list that runs katex first.
+type HastNode = {
+	type: string;
+	tagName?: string;
+	value?: string;
+	properties?: Record<string, unknown>;
+	children?: HastNode[];
+};
+
+function rehypeHtmlMath() {
+	const PAIR = /\$([^$\n]+?)\$/g;
+	return (tree: HastNode): void => {
+		const rewrite = (node: HastNode): void => {
+			const kids = node.children;
+			if (!kids) return;
+			const next: HastNode[] = [];
+			for (const child of kids) {
+				const raw = child.properties?.className;
+				const cls: string[] = Array.isArray(raw)
+					? (raw as string[])
+					: typeof raw === "string"
+						? [raw]
+						: [];
+				if (
+					child.type === "element" &&
+					(cls.includes("math-inline") ||
+						cls.includes("math-display") ||
+						cls.includes("language-math"))
+				) {
+					next.push(child);
+					continue;
+				}
+				if (child.type === "element") rewrite(child);
+				if (child.type !== "text" || typeof child.value !== "string") {
+					next.push(child);
+					continue;
+				}
+				const text = child.value;
+				let last = 0;
+				let m: RegExpExecArray | null;
+				PAIR.lastIndex = 0;
+				while ((m = PAIR.exec(text))) {
+					// An odd run of backslashes escapes the opening $, so the
+					// pair is literal currency and must be left alone.
+					let b = m.index - 1;
+					while (b >= 0 && text[b] === "\\") b--;
+					if ((m.index - 1 - b) % 2 === 1) continue;
+					if (m.index > last) {
+						next.push({ type: "text", value: text.slice(last, m.index) });
+					}
+					next.push({
+						type: "element",
+						tagName: "code",
+						properties: { className: ["math-inline"] },
+						children: [
+							{
+								type: "text",
+								value: m[1].split(DOLLAR_SENTINEL).join("\\$"),
+							},
+						],
+					});
+					last = m.index + m[0].length;
+				}
+				if (last < text.length) {
+					next.push({
+						type: "text",
+						value: text.slice(last).split(DOLLAR_SENTINEL).join("$"),
+					});
+				}
+			}
+			node.children = next;
+		};
+		const visit = (n: HastNode): void => {
+			if (n.tagName === "table") return rewrite(n);
+			n.children?.forEach(visit);
+		};
+		visit(tree);
 	};
 }
 
@@ -140,6 +300,21 @@ function blockToMd(b: ContentBlock): string {
 	if (b.type === "image" || b.type === "chart") {
 		const cap = (b.image_caption ?? b.chart_caption ?? []).join(" ").replace(/"/g, '\\"');
 		return `![](${b.img_path ?? ""} "${cap}")`;
+	}
+	if (b.type === "equation") {
+		// MinerU hands over LaTeX already wrapped in $$ (all 1036 blocks in a
+		// 726-page sample). remark-math only enters display mode when the $$
+		// fences are on their own lines, and it is the *parser* we control
+		// here — the reader's own remark plugin runs later, too late to
+		// change whether a node became math or inlineMath. Normalising the
+		// fences keeps numbered equations in display mode, which they need:
+		// KaTeX only accepts \tag there.
+		const t = (b.text ?? "").trim();
+		if (t.startsWith("$$") && t.endsWith("$$") && t.length >= 4) {
+			const inner = t.slice(2, -2).trim();
+			return inner ? `$$\n${inner}\n$$` : t;
+		}
+		return t;
 	}
 	if (b.type === "list") {
 		const ordered = /ordered|ol/i.test(b.sub_type ?? "");
@@ -186,8 +361,10 @@ function buildPage(blocks: ContentBlock[]): Page {
 		}
 		const md = blockToMd(cur).trim();
 		if (md) {
-			// Charts are plots, so they center like images rather than sitting
-			// in the text column.
+			// Figures center via this flex wrapper. Equations are deliberately
+			// NOT routed through it: KaTeX's own .katex-display rule already
+			// sets text-align:center, and the flex wrapper would block the
+			// horizontal scroll that wide equations need in a narrow column.
 			const isFigure = cur.type === "image" || cur.type === "chart";
 			const isTitle = cur.type === "text" && (cur.text_level ?? 0) > 0;
 			const centered = isFigure || (isTitle && isCentered(cur.bbox ?? DEFAULT_BBOX));
@@ -216,9 +393,14 @@ const MARKDOWN_REMARK_PLUGINS: MarkdownProps["remarkPlugins"] = [
 	remarkMath,
 	remarkRestoreDollars,
 ];
+// Order matters: rehypeRaw must expand the raw <table> HTML first, then
+// rehypeHtmlMath converts its `$...$` cells into math elements, and only then
+// can rehypeKatex render them. Running katex first (as this list used to) left
+// every table's math as literal text.
 const MARKDOWN_REHYPE_PLUGINS: MarkdownProps["rehypePlugins"] = [
-	rehypeKatex,
 	rehypeRaw,
+	rehypeHtmlMath,
+	rehypeKatex,
 	rehypeSlug,
 	rehypeAutolinkHeadings,
 	[rehypeHighlight, { ignoreMissing: true }],

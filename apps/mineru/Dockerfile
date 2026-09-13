@@ -6,10 +6,13 @@ ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-# libgl1: opencv; Noto fonts: CJK glyph rendering in extracted images
+# libgl1: opencv; Noto fonts: CJK glyph rendering in extracted images;
+# git: the mineru[pipeline] install below pulls from a git URL, and
+# vllm-openai:v0.21.0 no longer ships git (v0.11.2 did).
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         libgl1 \
+        git \
         fonts-noto-core \
         fonts-noto-cjk \
         fontconfig && \
